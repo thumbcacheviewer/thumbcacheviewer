@@ -254,7 +254,7 @@ int main( int argc, char *argv[] )
 
 			// Unknown value.
 			unsigned int unknown = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->unknown : ( ( database_cache_entry_vista * )database_cache_entry )->unknown );
-			printf( "Unknown value: %0x04x\n", unknown );
+			printf( "Unknown value: 0x%04x\n", unknown );
 
 			long long data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
 			
