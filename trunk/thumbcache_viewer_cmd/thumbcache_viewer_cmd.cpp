@@ -230,7 +230,7 @@ int main( int argc, char *argv[] )
 
 			// The entry hash may be the same as the filename.
 			wchar_t s_entry_hash[ 19 ] = { 0 };
-			swprintf( s_entry_hash, 18, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
+			swprintf( s_entry_hash, 19, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
 			wprintf_s( L"Entry hash: %s\n", s_entry_hash );
 
 			// Windows Vista
@@ -266,7 +266,7 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 data checksum.
 			wchar_t s_data_checksum[ 19 ] = { 0 };
-			swprintf( s_data_checksum, 18, L"0x%08x%08x", data_checksum, data_checksum + 4 );
+			swprintf( s_data_checksum, 19, L"0x%08x%08x", data_checksum, data_checksum + 4 );
 			wprintf_s( L"Data checksum (CRC-64): %s\n", s_data_checksum );
 
 			long long header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
@@ -279,7 +279,7 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 header checksum.
 			wchar_t s_header_checksum[ 19 ] = { 0 };
-			swprintf( s_header_checksum, 18, L"0x%08x%08x", header_checksum, header_checksum + 4 );
+			swprintf( s_header_checksum, 19, L"0x%08x%08x", header_checksum, header_checksum + 4 );
 			wprintf_s( L"Header checksum (CRC-64): %s\n", s_header_checksum );
 
 			// UTF-16 filename. Allocate the filename length plus 5 for the unicode extension and null character.
