@@ -230,7 +230,7 @@ int main( int argc, char *argv[] )
 
 			// The entry hash may be the same as the filename.
 			wchar_t s_entry_hash[ 19 ] = { 0 };
-			swprintf( s_entry_hash, sizeof( wchar_t ) * 18, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
+			swprintf( s_entry_hash, 18, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
 			wprintf_s( L"Entry hash: %s\n", s_entry_hash );
 
 			// Windows Vista
@@ -266,7 +266,7 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 data checksum.
 			wchar_t s_data_checksum[ 19 ] = { 0 };
-			swprintf( s_data_checksum, sizeof( wchar_t ) * 18, L"0x%08x%08x", data_checksum, data_checksum + 4 );
+			swprintf( s_data_checksum, 18, L"0x%08x%08x", data_checksum, data_checksum + 4 );
 			wprintf_s( L"Data checksum (CRC-64): %s\n", s_data_checksum );
 
 			long long header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
@@ -279,12 +279,12 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 header checksum.
 			wchar_t s_header_checksum[ 19 ] = { 0 };
-			swprintf( s_header_checksum, sizeof( wchar_t ) * 18, L"0x%08x%08x", header_checksum, header_checksum + 4 );
+			swprintf( s_header_checksum, 18, L"0x%08x%08x", header_checksum, header_checksum + 4 );
 			wprintf_s( L"Header checksum (CRC-64): %s\n", s_header_checksum );
 
 			// UTF-16 filename. Allocate the filename length plus 5 for the unicode extension and null character.
-			wchar_t *filename = new wchar_t[ sizeof( char ) * filename_length + ( sizeof( wchar_t ) * 5 ) ];
-			memset( filename, 0, filename_length + ( sizeof( wchar_t ) * 5 ) );
+			char *filename = new char[ sizeof( char ) * filename_length + ( sizeof( wchar_t ) * 5 ) ];
+			memset( filename, 0, sizeof( char ) * filename_length + ( sizeof( wchar_t ) * 5 ) );
 			ReadFile( hFile, filename, sizeof( char ) * filename_length, &read, NULL );
 			if ( read == 0 )
 			{
@@ -314,18 +314,18 @@ int main( int argc, char *argv[] )
 				// Look at the magic identifiers for the buffer and determine the file extension to append to our filename.
 				if ( memcmp( buf, FILETYPE_BMP, 3 ) == 0 )
 				{
-					wcscat_s( filename + wcslen( filename ), 5, L".bmp" );
+					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".bmp" );
 				}
 				else if ( memcmp( buf, FILETYPE_JPEG, 4 ) == 0 )
 				{
-					wcscat_s( filename + wcslen( filename ), 5, L".jpg" );
+					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".jpg" );
 				}
 				else if ( memcmp( buf, FILETYPE_PNG, 8 ) == 0 )
 				{
-					wcscat_s( filename + wcslen( filename ), 5, L".png" );
+					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".png" );
 				}
 
-				wprintf_s( L"Identifier string: %s\n", filename );
+				wprintf_s( L"Identifier string: %s\n", ( wchar_t * )filename );
 
 				// Output the data with the given (UTF-16) filename.
 				printf( "---------------------------------------------\n" );
@@ -333,7 +333,7 @@ int main( int argc, char *argv[] )
 				printf( "---------------------------------------------\n" );
 
 				// Attempt to save the buffer to a file.
-				HANDLE hFile_save = CreateFile( filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+				HANDLE hFile_save = CreateFile( ( wchar_t * )filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 				if ( hFile_save != INVALID_HANDLE_VALUE )
 				{
 					DWORD written = 0;
@@ -348,10 +348,10 @@ int main( int argc, char *argv[] )
 				printf( "---------------------------------------------\n" );
 
 				// Delete our data buffer.
-				delete buf;
+				delete[] buf;
 			}
 			// Delete our filename.
-			delete filename;
+			delete[] filename;
 
 			// Delete our database cache entry.
 			delete database_cache_entry;
