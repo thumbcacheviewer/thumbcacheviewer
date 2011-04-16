@@ -24,7 +24,7 @@
 #include <wchar.h>
 
 // Magic identifiers for various image formats.
-#define FILETYPE_BMP	"BM6"
+#define FILETYPE_BMP	"BM"
 #define FILETYPE_JPEG	"\xFF\xD8\xFF\xE0"
 #define FILETYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 
@@ -312,7 +312,7 @@ int main( int argc, char *argv[] )
 				}
 
 				// Look at the magic identifiers for the buffer and determine the file extension to append to our filename.
-				if ( memcmp( buf, FILETYPE_BMP, 3 ) == 0 )
+				if ( memcmp( buf, FILETYPE_BMP, 2 ) == 0 )
 				{
 					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".bmp" );
 				}
