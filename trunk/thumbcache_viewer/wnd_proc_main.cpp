@@ -437,6 +437,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							// Get the directory path from the id list.
 							SHGetPathFromIDList( lpiidl, save_directory );
+							CoTaskMemFree( lpiidl );
 							
 							// Depending on what was selected, get the number of items we'll be saving.
 							int num_items = 0;
