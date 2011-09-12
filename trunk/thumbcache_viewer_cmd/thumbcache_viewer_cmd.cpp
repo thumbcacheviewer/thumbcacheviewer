@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -164,8 +164,8 @@ int main( int argc, char *argv[] )
 		printf( "Number of cache entries: %lu\n", dh.number_of_cache_entries );
 
 		// Set the file pointer to the first available cache entry.
-		unsigned int file_position = SetFilePointer( hFile, dh.first_cache_entry, NULL, FILE_BEGIN );
-		if ( file_position == INVALID_SET_FILE_POINTER )
+		unsigned int current_position = SetFilePointer( hFile, dh.first_cache_entry, NULL, FILE_BEGIN );
+		if ( current_position == INVALID_SET_FILE_POINTER )
 		{
 			// The file pointer reached the EOF.
 			CloseHandle( hFile );
@@ -177,8 +177,18 @@ int main( int argc, char *argv[] )
 		for ( unsigned int i = 0; i < dh.number_of_cache_entries; i++ )
 		{
 			printf( "\n---------------------------------------------\n" );
-			printf( "Extracting cache entry %lu at %lu bytes.\n", i + 1, file_position );
+			printf( "Extracting cache entry %lu at %lu bytes.\n", i + 1, current_position );
 			printf( "---------------------------------------------\n" );
+
+			// Set the file pointer to the end of the last cache entry.
+			current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
+			if ( current_position == INVALID_SET_FILE_POINTER )
+			{
+				// EOF reached.
+				CloseHandle( hFile );
+				printf( "End of file reached. There are no more entires.\n" );
+				return 0;
+			}
 
 			void *database_cache_entry = NULL;
 			
@@ -189,11 +199,19 @@ int main( int argc, char *argv[] )
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_7 ), &read, NULL );
 				
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
-				if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_7 ) )
+				if ( read != sizeof( database_cache_entry_7 ) )
+				{
+					// EOF reached.
+					free( database_cache_entry );
+					CloseHandle( hFile );
+					printf( "End of file reached. There are no more entires.\n" );
+					return 0;
+				}
+				else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "Database is not supported.\n" );
+					printf( "Invalid cache entry located at %lu bytes.", current_position );
 					return 0;
 				}
 			}
@@ -203,13 +221,38 @@ int main( int argc, char *argv[] )
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_vista ), &read, NULL );
 				
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
-				if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_vista ) )
+				if ( read != sizeof( database_cache_entry_vista ) )
+				{
+					// EOF reached.
+					free( database_cache_entry );
+					CloseHandle( hFile );
+					printf( "End of file reached. There are no more entires.\n" );
+					return 0;
+				}
+				else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "Database is not supported.\n" );
+					printf( "Invalid cache entry located at %lu bytes.", current_position );
 					return 0;
 				}
+			}
+
+			// Cache size includes the 4 byte signature and itself ( 4 bytes ).
+			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size );		
+			
+			current_position += cache_entry_size;
+
+			// The length of our filename.
+			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
+
+			// Skip blank filenames.
+			if ( filename_length == 0 )
+			{
+				// Free each database entry that we've skipped over.
+				free( database_cache_entry );
+
+				continue;
 			}
 
 			// The magic identifier for the current entry.
@@ -217,8 +260,6 @@ int main( int argc, char *argv[] )
 			memcpy( stmp, magic_identifier, sizeof( char ) * 4 );
 			printf( "Signature (magic identifier): %s\n", stmp );
 
-			// Cache size includes the 4 byte signature and itself ( 4 bytes ).
-			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size );		
 			printf( "Cache size: %lu bytes\n", cache_entry_size );
 
 			long long entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
@@ -241,8 +282,6 @@ int main( int argc, char *argv[] )
 				wprintf_s( L"File extension: %s\n", ( ( database_cache_entry_vista * )database_cache_entry )->extension );
 			}
 
-			// The length of our filename.
-			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
 			printf( "Identifier string size: %lu bytes\n", filename_length );
 
 			// Padding size.
@@ -298,6 +337,8 @@ int main( int argc, char *argv[] )
 				printf( "End of file reached. There are no more valid entires.\n" );
 				return 0;
 			}
+
+			unsigned int file_position = 0;
 
 			// Adjust our file pointer if we truncated the filename. This really shouldn't happen unless someone tampered with the database, or it became corrupt.
 			if ( filename_length > filename_truncate_length )
