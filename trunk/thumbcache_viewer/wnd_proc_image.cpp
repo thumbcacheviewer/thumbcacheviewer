@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,7 +15,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "globals.h"
+
+#define IDT_TIMER		2001
+
+#define MAX_SCALE_SIZE	25.0f
 
 // Window variables
 int cx_i = 0;				// Current x (left) position of the image window based on the mouse.
@@ -28,7 +33,7 @@ bool mouse_l_down = false;	// Toggled when the right mouse button is down.
 PAINTSTRUCT ps = { NULL };	// The paint structure used to draw on the image window.
 float scale = 1.0f;			// Scale of the image.
 
-POINT drag_rect = { 0 };		// The current position of gdi_image in the image window.
+POINT drag_rect = { 0 };	// The current position of gdi_image in the image window.
 POINT old_pos = { 0 };		// The old position of gdi_image. Used to calculate the rate of change.
 
 // Timer variables.
@@ -515,7 +520,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				{
 					RECT rc = { 0 };
 					GetWindowRect( hWnd, &rc );
-					// Call the WM_MOVING callback with the current position of our window. Set wParam to -1 to tell WM_MOVING that we dont' want to calculate the cursor position.
+					// Call the WM_MOVING callback with the current position of our window. Set wParam to -1 to tell WM_MOVING that we don't want to calculate the cursor position.
 					SendMessage( hWnd, WM_MOVING, -1, ( LPARAM )&rc );
 				}
 				break;
@@ -525,6 +530,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			{
 				// We're no longer attached to the main window if we're maximized.
 				is_attached = false;
+				skip_main = false;
 			}
 			return 0;
 		}

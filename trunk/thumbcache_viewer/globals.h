@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
@@ -43,10 +44,6 @@
 #define MIN_WIDTH		480
 #define MIN_HEIGHT		320
 
-#define FILE_TYPE_BMP	"BM"
-#define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
-#define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
-
 #define MENU_OPEN		1001
 #define MENU_SAVE_ALL	1002
 #define MENU_SAVE_SEL	1003
@@ -55,18 +52,12 @@
 #define MENU_SELECT_ALL	1006
 #define MENU_REMOVE_SEL	1007
 
-#define IDT_TIMER		2001
-
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
 
-#define MAX_SCALE_SIZE	25.0f
+#define MAX_ENTRIES		4096	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
 
-#define MIN_COLUMN_SIZE	18
-
-#define SNAP_WIDTH		10;	// The minimum distance at which our windows will attach together.
-
-#define WM_PROPAGATE	WM_APP
+#define WM_PROPAGATE	WM_APP	// Updates the prompt window.
 
 // Thumbcache header information.
 struct database_header
@@ -133,7 +124,6 @@ LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 bool is_close( int a, int b );
 unsigned __stdcall read_database( void *pArguments );
-//void read_database( wchar_t &filepath );
 
 // These are all variables that are shared among the separate .cpp files.
 

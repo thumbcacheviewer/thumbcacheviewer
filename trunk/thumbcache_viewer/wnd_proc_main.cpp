@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,7 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "globals.h"
+
+#define MIN_COLUMN_SIZE	18
 
 WNDPROC EditProc = NULL;			// Subclassed listview edit window.
 
@@ -30,8 +33,6 @@ HMENU g_hMenuSub_context = NULL;	// Handle to our context menu.
 int cx = 0;							// Current x (left) position of the main window based on the mouse.
 int cy = 0;							// Current y (top) position of the main window based on the mouse.
 
-bool first_show = true;				// First time the image window gets shown.
-
 RECT last_pos = { 0 };				// The last position of the image window.
 
 RECT current_edit_pos = { 0 };		// Current position of the listview edit control.
@@ -44,6 +45,8 @@ bool is_eh_lower = true;			// Toggle the entry hash text.
 
 bool is_attached = false;			// Toggled when our windows are attached.
 bool skip_main = false;				// Prevents the main window from moving the image window if it is about to attach.
+
+bool first_show = false;			// Show the image window for the first time.
 
 RECT last_dim = { 0 };				// Keeps track of the image window's dimension before it gets minimized.
 
@@ -262,7 +265,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			// Allow our main window to attach to the image window.
 			GetWindowRect( g_hWnd_image, &wa );
-			if ( is_attached == false )
+			if ( is_attached == false && IsWindowVisible( g_hWnd_image ) )
 			{
 				if( is_close( rc->right, wa.left ) )			// Attach to left side of image window.
 				{
@@ -323,13 +326,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					
 					skip_main = true;
 				}
-
-				// Save our last position.
-				last_pos.bottom = rc->bottom;
-				last_pos.left = rc->left;
-				last_pos.right = rc->right;
-				last_pos.top = rc->top;
 			}
+
+			// Save our last position.
+			last_pos.bottom = rc->bottom;
+			last_pos.left = rc->left;
+			last_pos.right = rc->right;
+			last_pos.top = rc->top;
+
 			return TRUE;
 		}
 		break;
@@ -527,6 +531,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							ShowWindow( g_hWnd_image, SW_HIDE );
 						}
 
+						is_attached = false;
+						skip_main = false;
+
 						// See if we've selected all the items. We can clear the list much faster this way.
 						int num_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 						if ( num_items == SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) )
@@ -569,6 +576,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								}
 							}
 						}
+
+						// Refresh the listview. (Updates the item count column)
+						InvalidateRect( g_hWnd_list, NULL, TRUE );
 					}
 					break;
 
@@ -805,25 +815,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						gdi_image = new Gdiplus::Image( is );
 						is->Release();
 
-						RECT rc = { 0 };
 						if ( !IsWindowVisible( g_hWnd_image ) )
 						{
-							// Only move the window if it's the first time showing it.
-							if ( first_show == true )
+							// Move our image window next to the main window on its right side if it's the first time we're showing the image window.
+							if ( first_show == false )
 							{
-								// Make sure our main window isn't maximized. If it is, then the image window will be created in the center.
-								if ( !IsZoomed( hWnd ) )
-								{
-									// Move our image window next to the main window on its right side.
-									HDWP hdwp = BeginDeferWindowPos( 1 );
-									
-									GetWindowRect( hWnd, &rc );
-									DeferWindowPos( hdwp, g_hWnd_image, HWND_TOPMOST, rc.right, rc.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
-									EndDeferWindowPos( hdwp );
-
-									is_attached = true;	// The two windows will now be lined up.
-									first_show = false;	// Prevent this condition from occuring again.
-								}
+								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right, last_pos.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
+								first_show = true;
 							}
 
 							// This is done to keep both windows on top of other windows.
@@ -831,7 +829,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							SetWindowPos( g_hWnd_image, HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE );
 							// Set our main window on top of the image window.
 							SetWindowPos( hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE );
-							// Now that the image window is on top of everything (except the main window), set it back to non-topmost and show it.
+							// The image window is on top of everything (except the main window), set it back to non-topmost.
 							SetWindowPos( g_hWnd_image, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW );
 						}
 
@@ -859,6 +857,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						SetWindowText( g_hWnd_image, new_title );
 
 						// See if our image window is minimized and set the rectangle to its old size if it is.
+						RECT rc = { 0 };
 						if ( IsIconic( g_hWnd_image ) == TRUE )
 						{
 							rc = last_dim;
