@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "globals.h"
 
 // We want to get these objects before the window is shown.
@@ -110,7 +111,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		return 1;
 	}
 
-	g_hWnd_prompt = CreateWindowEx( WS_EX_DLGMODALFRAME, L"prompt", L"Too Many Entries", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - ( MIN_WIDTH / 2 ) ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - 120 ) / 2 ), MIN_WIDTH / 2, 120, g_hWnd_main, NULL, NULL, NULL );
+	g_hWnd_prompt = CreateWindowEx( WS_EX_DLGMODALFRAME, L"prompt", L"Too Many Entries", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - 250 ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - 145 ) / 2 ), 250, 145, g_hWnd_main, NULL, NULL, NULL );
 
 	if ( !g_hWnd_prompt )
 	{

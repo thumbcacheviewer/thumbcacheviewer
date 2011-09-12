@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011  Eric Kutcher
+    Copyright (C) 2011 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,7 +15,14 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "globals.h"
+
+#define FILE_TYPE_BMP	"BM"
+#define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
+#define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
+
+#define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
 
 HANDLE prompt_mutex = NULL;
 
@@ -30,7 +37,6 @@ bool is_close( int a, int b )
 }
 
 unsigned __stdcall read_database( void *pArguments )
-//void read_database( wchar_t &filepath )
 {
 	wchar_t *filepath = ( wchar_t * )pArguments;
 
@@ -70,20 +76,24 @@ unsigned __stdcall read_database( void *pArguments )
 			return 0;
 		}
 
-		entry_begin = 0;
-		entry_end = dh.number_of_cache_entries;
-		if ( dh.number_of_cache_entries > 2048 )
+		entry_begin = 1;						// By default, we'll start with the first entry.
+		entry_end = dh.number_of_cache_entries;	// By default, we'll end with the last entry.
+
+		// If we've hit our display limit, then prompt the user for a range of entries.
+		if ( dh.number_of_cache_entries > MAX_ENTRIES )
 		{
 			// This mutex will be released when the user selects a range of entries.
 			prompt_mutex = CreateSemaphore( NULL, 0, 1, NULL );
 
-			cancelled_prompt = false;
+			cancelled_prompt = false;	// Assume they haven't cancelled the prompt.
 			SendMessage( g_hWnd_prompt, WM_PROPAGATE, dh.number_of_cache_entries, 0 );
 
 			// Wait for the user to select the range of entries.
 			WaitForSingleObject( prompt_mutex, INFINITE );
 			CloseHandle( prompt_mutex );
+			prompt_mutex = NULL;
 
+			// If the user cancelled the prompt, then exit the thread. We'll assume they don't want to load the database.
 			if ( cancelled_prompt == true )
 			{
 				CloseHandle( hFile );
@@ -94,24 +104,52 @@ unsigned __stdcall read_database( void *pArguments )
 			}
 		}
 
+		// If the user selected an ending value that's larger than the number of entries, then set it to the number of entries instead.
 		if ( entry_end > dh.number_of_cache_entries )
 		{
 			entry_end = dh.number_of_cache_entries;
 		}
 
+		// Determine whether we're going to offset the entries we list.
 		bool offset_beginning = ( entry_begin > 1 ? true : false );
 
 		// Go through our database and attempt to extract each cache entry.
-		for ( unsigned int i = 0; i <= entry_end - 1; ++i )
+		for ( unsigned int i = 1; i <= entry_end; ++i )
 		{
+			// Set the file pointer to the end of the last cache entry.
+			current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
+			if ( current_position == INVALID_SET_FILE_POINTER )
+			{
+				CloseHandle( hFile );
+				free( filepath );
+
+				wchar_t msg[ 21 ] = { 0 };
+				swprintf_s( msg, 21, L"Invalid cache entry.", current_position );
+				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+
+				_endthreadex( 0 );
+				return 0;
+			}
+
 			void *database_cache_entry = NULL;
 			// Determine the type of database we're working with and store its content in the correct structure.
 			if ( dh.version == WINDOWS_7 )
 			{
 				database_cache_entry = ( database_cache_entry_7 * )malloc( sizeof( database_cache_entry_7 ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_7 ), &read, NULL );
+				
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
-				if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_7 ) )
+				if ( read != sizeof( database_cache_entry_7 ) )
+				{
+					// EOF reached.
+					free( database_cache_entry );
+					CloseHandle( hFile );
+					free( filepath );
+
+					_endthreadex( 0 );
+					return 0;
+				}
+				else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
 					CloseHandle( hFile );
@@ -130,7 +168,17 @@ unsigned __stdcall read_database( void *pArguments )
 				database_cache_entry = ( database_cache_entry_vista * )malloc( sizeof( database_cache_entry_vista ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_vista ), &read, NULL );
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
-				if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_vista ) )
+				if ( read != sizeof( database_cache_entry_vista ) )
+				{
+					// EOF reached.
+					free( database_cache_entry );
+					CloseHandle( hFile );
+					free( filepath );
+
+					_endthreadex( 0 );
+					return 0;
+				}
+				else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
 					CloseHandle( hFile );
@@ -155,56 +203,33 @@ unsigned __stdcall read_database( void *pArguments )
 				return 0;
 			}
 
-			current_position += read;
+			// Size of the cache entry.
+			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size );
 
-			// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
-			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
-			
-			// Filename lengths are guaranteed to be greater than 0, otherwise the file wouldn't exist. If it is zero, then we can't continue.
-			// More than likely, we'll have reached the end of any relevant database entries.
-			if ( filename_length == 0 )
-			{
-				free( database_cache_entry );
-				CloseHandle( hFile );
-				free( filepath );
+			current_position += cache_entry_size;
 
-				_endthreadex( 0 );
-				return 0;
-			}
-
-			// Padding before the data entry.
-			unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size );
-
-			// Size of our image.
-			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size );
-
-			unsigned int file_position = 0;
-
+			// If we've selected a range of values, then we're going to offset the file pointer.
 			if ( offset_beginning == true )
 			{
-				// Offset the file pointer and see if we've moved beyond the EOF.
-				file_position = SetFilePointer( hFile, filename_length + padding_size + data_size, 0, FILE_CURRENT );
-				if ( file_position == INVALID_SET_FILE_POINTER )
-				{
-					free( database_cache_entry );
-					CloseHandle( hFile );
-					free( filepath );
-
-					wchar_t msg[ 49 ] = { 0 };
-					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
-
-					_endthreadex( 0 );
-					return 0;
-				}
-
-				current_position = file_position;
-
-				if ( ( i + 1 ) == ( entry_begin - 1 ) )
+				// If we've reached the beginning of the range, then we're no longer going to offset the file pointer.
+				if ( ( i + 1 ) == entry_begin )
 				{
 					offset_beginning = false;
 				}
 
+				// Free each database entry that we've skipped over.
+				free( database_cache_entry );
+
+				continue;
+			}
+			
+			// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
+			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
+
+			// Skip blank filenames.
+			if ( filename_length == 0 )
+			{
+				// Free each database entry that we've skipped over.
 				free( database_cache_entry );
 
 				continue;
@@ -224,15 +249,15 @@ unsigned __stdcall read_database( void *pArguments )
 				CloseHandle( hFile );
 				free( filepath );
 				
-				wchar_t msg[ 46 ] = { 0 };
-				swprintf_s( msg, 46, L"Invalid filename located at %lu bytes.", current_position );
+				wchar_t msg[ 49 ] = { 0 };
+				swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 				_endthreadex( 0 );
 				return 0;
 			}
 
-			current_position += read;
+			unsigned int file_position = 0;
 
 			// Adjust our file pointer if we truncated the filename. This really shouldn't happen unless someone tampered with the database, or it became corrupt.
 			if ( filename_length > filename_truncate_length )
@@ -246,16 +271,17 @@ unsigned __stdcall read_database( void *pArguments )
 					CloseHandle( hFile );
 					free( filepath );
 
-					wchar_t msg[ 46 ] = { 0 };
-					swprintf_s( msg, 46, L"Invalid filename located at %lu bytes.", current_position );
+					wchar_t msg[ 49 ] = { 0 };
+					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 					
 					_endthreadex( 0 );
 					return 0;
 				}
-				
-				current_position = file_position;
 			}
+
+			// Padding before the data entry.
+			unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size );
 
 			// This will set our file pointer to the beginning of the data entry.
 			file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
@@ -266,15 +292,16 @@ unsigned __stdcall read_database( void *pArguments )
 				CloseHandle( hFile );
 				free( filepath );
 
-				wchar_t msg[ 50 ] = { 0 };
-				swprintf_s( msg, 50, L"Invalid padding size located at %lu bytes.", current_position );
+				wchar_t msg[ 49 ] = { 0 };
+				swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 				_endthreadex( 0 );
 				return 0;
 			}
 
-			current_position = file_position;
+			// Size of our image.
+			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size );
 
 			// Create a new info structure to send to the listview item's lParam value.
 			fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
@@ -325,8 +352,8 @@ unsigned __stdcall read_database( void *pArguments )
 					CloseHandle( hFile );
 					free( filepath );
 
-					wchar_t msg[ 48 ] = { 0 };
-					swprintf_s( msg, 48, L"Invalid data entry located at %lu bytes.", current_position );
+					wchar_t msg[ 49 ] = { 0 };
+					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 					_endthreadex( 0 );
