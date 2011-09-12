@@ -445,8 +445,8 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 						SetTimer( hWnd, IDT_TIMER, 5000, ( TIMERPROC )TimerProc );
 					}
 
-					wchar_t buf[ 19 ] = { 0 };
-					swprintf( buf, 19, L" Zoom level: %4.1fx ", scale );
+					wchar_t buf[ 20 ] = { 0 };
+					swprintf_s( buf, 20, L" Zoom level: %4.1fx ", scale );
 
 					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont );
 					DeleteObject( ohf );

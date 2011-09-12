@@ -71,7 +71,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			mii.fMask = MIIM_TYPE | MIIM_ID | MIIM_STATE;
 			mii.fType = MFT_STRING;
 			mii.dwTypeData = L"&Open...\tCtrl+O";
-			mii.cch = 8;
+			mii.cch = 15;
 			mii.wID = MENU_OPEN;
 			InsertMenuItem( hMenuSub_file, 0, TRUE, &mii );
 
@@ -80,12 +80,12 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			mii.fType = MFT_STRING;
 			mii.dwTypeData = L"Save All...\tCtrl+S";
-			mii.cch = 11;
+			mii.cch = 18;
 			mii.wID = MENU_SAVE_ALL;
 			mii.fState = MFS_DISABLED;
 			InsertMenuItem( hMenuSub_file, 2, TRUE, &mii );
 			mii.dwTypeData = L"Save Selected...\tCtrl+Shift+S";
-			mii.cch = 16;
+			mii.cch = 29;
 			mii.wID = MENU_SAVE_SEL;
 			InsertMenuItem( hMenuSub_file, 3, TRUE, &mii );
 
@@ -102,7 +102,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// EDIT MENU
 			mii.fType = MFT_STRING;
 			mii.dwTypeData = L"Remove Selected\tCtrl+R";
-			mii.cch = 15;
+			mii.cch = 22;
 			mii.wID = MENU_REMOVE_SEL;
 			mii.fState = MFS_DISABLED;
 			InsertMenuItem( hMenuSub_edit, 0, TRUE, &mii );
@@ -112,7 +112,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			mii.fType = MFT_STRING;
 			mii.dwTypeData = L"Select All\tCtrl+A";
-			mii.cch = 10;
+			mii.cch = 17;
 			mii.wID = MENU_SELECT_ALL;
 			InsertMenuItem( hMenuSub_edit, 2, TRUE, &mii );
 
@@ -397,21 +397,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					case MENU_OPEN:
 					{
-						wchar_t filepath[ MAX_PATH + 1 ] = { 0 };
+						wchar_t *filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * MAX_PATH );
+						wmemset( filepath, 0, MAX_PATH );
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
 						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0";
 						ofn.lpstrFile = filepath;
-						ofn.nMaxFile = sizeof( filepath );
+						ofn.nMaxFile = MAX_PATH;
 						ofn.lpstrTitle = L"Open a Thumbcache Database file";
 						ofn.Flags = OFN_READONLY;
 
 						// Display the Open File dialog box
 						if( GetOpenFileName( &ofn ) )
 						{
-							read_database( *filepath );
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )filepath, 0, NULL ) );
 							break;
 						}
+						
+						free( filepath );
 					}
 					break;
 
@@ -431,7 +434,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 						bi.ulFlags = BIF_EDITBOX | BIF_VALIDATE;
 
-						wchar_t save_directory[ MAX_PATH + 1 ] = { 0 };
+						wchar_t save_directory[ MAX_PATH ] = { 0 };
 						LPITEMIDLIST lpiidl = SHBrowseForFolder( &bi );
 						if ( lpiidl )
 						{
@@ -450,13 +453,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								num_items = SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
 							}
 
-							// Retrieve the lparam value from the selected listview item.
+							// Retrieve the lParam value from the selected listview item.
 							LVITEM lvi = { NULL };
 							lvi.mask = LVIF_PARAM;
 							lvi.iItem = -1;	// Set this to -1 so that the LVM_GETNEXTITEM call can go through the list correctly.
 
 							// Go through all the items we'll be saving.
-							for ( int i = 0; i < num_items; i++ )
+							for ( int i = 0; i < num_items; ++i )
 							{
 								if ( LOWORD( wParam ) == MENU_SAVE_ALL )
 								{
@@ -469,7 +472,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 	
 								// Create a buffer to read in our new bitmap.
-								char *save_image = new char[ ( ( fileinfo * )lvi.lParam )->size ];
+								char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 								// Attempt to open a file for reading.
 								HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -482,9 +485,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 									ReadFile( hFile, save_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
 									CloseHandle( hFile );
 
-									// The fullpath isn't going to be 2 * MAX_PATH long and if it is, it won't get saved.
-									wchar_t fullpath[ ( 2 * MAX_PATH ) + 2 ] = { 0 };
-									swprintf( fullpath, ( 2 * MAX_PATH ) + 2, L"%s\\%s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
+									// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
+									wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
+									swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
 
 									// Attempt to open a file for saving.
 									HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -503,8 +506,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 										MessageBox( hWnd, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 									}
 								}
-								// Delete our buffer.
-								delete[] save_image;
+								// Free our buffer.
+								free( save_image );
 							}
 						}
 					}
@@ -524,25 +527,47 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							ShowWindow( g_hWnd_image, SW_HIDE );
 						}
 
-						// Get the first selected item.
-						int selected_index = SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_SELECTED );
-						while ( selected_index != -1 )
+						// See if we've selected all the items. We can clear the list much faster this way.
+						int num_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+						if ( num_items == SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) )
 						{
-							// We first need to get the lparam value otherwise the memory won't be freed.
-							LVITEMA lvi = { NULL };
-							lvi.mask = LVIF_PARAM;
-							lvi.iItem = selected_index;
-							SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
-							
-							// Delete our filename, then fileinfo structure.
-							delete[] ( ( fileinfo * )lvi.lParam )->filename;
-							delete ( fileinfo * )lvi.lParam;
+							// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
+							for ( int i = 0; i < num_items; ++i )
+							{
+								LVITEMA lvi = { NULL };
+								lvi.mask = LVIF_PARAM;
+								lvi.iItem = i;
+								SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-							// Remove the list item.
-							SendMessage( g_hWnd_list, LVM_DELETEITEM, selected_index, 0 );
+								// First free the filename pointer.
+								free( ( ( fileinfo * )lvi.lParam )->filename );
+								// Then free the fileinfo structure.
+								free( ( fileinfo * )lvi.lParam );
+							}
 
-							// Get the next selected item in the list.
-							selected_index = SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_SELECTED );
+							SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
+						}
+						else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
+						{
+							for ( int i = num_items - 1; i >= 0; --i )
+							{
+								// See if the item is selected.
+								if ( SendMessage( g_hWnd_list, LVM_GETITEMSTATE, i, LVIS_SELECTED ) == LVIS_SELECTED )
+								{
+									// We first need to get the lParam value otherwise the memory won't be freed.
+									LVITEMA lvi = { NULL };
+									lvi.mask = LVIF_PARAM;
+									lvi.iItem = i;
+									SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+									
+									// Free our filename, then fileinfo structure.
+									free( ( ( fileinfo * )lvi.lParam )->filename );
+									free( ( fileinfo * )lvi.lParam );
+
+									// Remove the list item.
+									SendMessage( g_hWnd_list, LVM_DELETEITEM, i, 0 );
+								}
+							}
 						}
 					}
 					break;
@@ -741,19 +766,19 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					EnableMenuItem( g_hMenuSub_context, MENU_REMOVE_SEL, MF_ENABLED );
 					EnableMenuItem( g_hMenuSub_context, MENU_SAVE_SEL, MF_ENABLED );
 					
-					// Retrieve the lparam value from the selected listview item.
+					// Retrieve the lParam value from the selected listview item.
 					LVITEM lvi = { NULL };
 					lvi.mask = LVIF_PARAM;
 					lvi.iItem = nmlv->iItem;
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-					// Delete our image buffer if it already exists.
+					// Free our image buffer if it already exists.
 					if ( current_image != NULL )
 					{
-						delete[] current_image;	
+						free( current_image );
 					}
 					// Create a buffer to read in our new bitmap.
-					current_image = new char[ ( ( fileinfo * )lvi.lParam )->size ];
+					current_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 					// Attempt to open a file for reading.
 					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -823,10 +848,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_png );
 						}
+						else
+						{
+							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, NULL );
+						}
 
 						// Set the image window's new title.
-						wchar_t new_title[ MAX_PATH + 65 ] = { 0 };
-						swprintf( new_title, MAX_PATH + 65, L"%s - %dx%d", ( ( fileinfo * )lvi.lParam )->filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
+						wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
+						swprintf_s( new_title, MAX_PATH + 30, L"%s - %dx%d", ( ( fileinfo * )lvi.lParam )->filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
 						SetWindowText( g_hWnd_image, new_title );
 
 						// See if our image window is minimized and set the rectangle to its old size if it is.
@@ -907,25 +936,25 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						return FALSE;
 					}
 					// Prevent the edit if the text length is 0.
-					unsigned int length = wcslen( pdi->item.pszText ) + 1;
+					unsigned int length = wcslen( pdi->item.pszText );
 					if ( length == 0 )
 					{
 						return FALSE;
 					}
 
-					// Delete the old filename.
-					delete[] current_fileinfo->filename;
+					// Free the old filename.
+					free( current_fileinfo->filename );
 					// Create a new filename based on the editbox's text.
-					wchar_t *filename = new wchar_t[ length ];
-					wmemset( filename, 0, length );
-					wcscpy_s( filename, length, pdi->item.pszText );
+					wchar_t *filename = ( wchar_t * )malloc( sizeof( wchar_t ) * ( length + 1 ) );
+					wmemset( filename, 0, length + 1 );
+					wcscpy_s( filename, length + 1, pdi->item.pszText );
 
-					// Modify our listview item's fileinfo lparam value.
+					// Modify our listview item's fileinfo lParam value.
 					current_fileinfo->filename = filename;
 
 					// Set the image window's new title.
-					wchar_t new_title[ MAX_PATH + 65 ] = { 0 };
-					swprintf( new_title, MAX_PATH + 65, L"%s - %dx%d", filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
+					wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
+					swprintf_s( new_title, MAX_PATH + 30, L"%s - %dx%d", filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
 					SetWindowText( g_hWnd_image, new_title );
 
 					return TRUE;
@@ -963,7 +992,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				}
 
 				// Get the item's text.
-				wchar_t buf[ MAX_PATH + 1 ];
+				wchar_t buf[ MAX_PATH + 5 ];
 				LVITEM lvi = { 0 };
 				lvi.mask = LVIF_PARAM;
 				lvi.iItem = dis->itemID;
@@ -978,10 +1007,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				int RIGHT_COLUMNS = 0;
 
 				// Loop through all the columns
-				for ( int i = 0; i <= 8; i++ )
+				for ( int i = 0; i <= 8; ++i )
 				{
 					lvi.iSubItem = i;	// Set the column
-					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );	// Get the lparam value from our item.
+					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );	// Get the lParam value from our item.
 
 					RIGHT_COLUMNS = 0;
 
@@ -990,13 +1019,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						case 0:
 						{
-							swprintf( buf, 9, L"%d", dis->itemID + 1 );
+							swprintf_s( buf, MAX_PATH + 5, L"%d", dis->itemID + 1 );
 						}
 						break;
 
 						case 1:
 						{
-							swprintf( buf, MAX_PATH + 1, L"%s", ( ( fileinfo * )lvi.lParam )->filename );
+							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->filename );
 						}
 						break;
 
@@ -1007,11 +1036,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
 							if ( is_kbytes_size == true )
 							{
-								swprintf( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
+								swprintf_s( buf, MAX_PATH + 5, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
 							}
 							else
 							{
-								swprintf( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
+								swprintf_s( buf, MAX_PATH + 5, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
 							}
 						}
 						break;
@@ -1023,11 +1052,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
 							if ( is_kbytes_offset == true )
 							{
-								swprintf( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->offset );
+								swprintf_s( buf, MAX_PATH + 5, L"%d B", ( ( fileinfo * )lvi.lParam )->offset );
 							}
 							else
 							{
-								swprintf( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->offset / 1024 );
+								swprintf_s( buf, MAX_PATH + 5, L"%d KB", ( ( fileinfo * )lvi.lParam )->offset / 1024 );
 							}
 						}
 						break;
@@ -1037,11 +1066,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_dc_lower == true )
 							{
-								swprintf( buf, 19, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
 							}
 							else
 							{
-								swprintf( buf, 19, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
 							}
 						}
 						break;
@@ -1051,11 +1080,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_hc_lower == true )
 							{
-								swprintf( buf, 19, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
 							}
 							else
 							{
-								swprintf( buf, 19, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
 							}
 						}
 						break;
@@ -1065,11 +1094,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_eh_lower == true )
 							{
-								swprintf( buf, 19, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
 							}
 							else
 							{
-								swprintf( buf, 19, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
 							}
 						}
 						break;
@@ -1078,18 +1107,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							if ( ( ( fileinfo * )lvi.lParam )->system == WINDOWS_7 )
 							{
-								swprintf( buf, 10, L"Windows 7" );
+								wcscpy_s( buf, MAX_PATH + 5, L"Windows 7" );
 							}
 							else
 							{
-								swprintf( buf, 14, L"Windows Vista" );
+								wcscpy_s( buf, MAX_PATH + 5, L"Windows Vista" );
 							}
 						}
 						break;
 
 						case 8:
 						{
-							swprintf( buf, MAX_PATH + 1, L"%s", ( ( fileinfo * )lvi.lParam )->dbpath );
+							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->dbpath );
 						}
 						break;
 					}
@@ -1190,24 +1219,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			int num_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 			if ( num_items > 0 )
 			{
-				// Go through each item, and delete their lparam values. current_fileinfo will get deleted here.
-				for ( int i = 0; i < num_items; i++ )
+				// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
+				for ( int i = 0; i < num_items; ++i )
 				{
 					LVITEMA lvi = { NULL };
 					lvi.mask = LVIF_PARAM;
 					lvi.iItem = i;
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-					// First delete the filename pointer.
-					delete[] ( ( fileinfo * )lvi.lParam )->filename;
-					// Then delete the fileinfo structure.
-					delete ( fileinfo * )lvi.lParam;
+					// First free the filename pointer.
+					free( ( ( fileinfo * )lvi.lParam )->filename );
+					// Then free the fileinfo structure.
+					free( ( fileinfo * )lvi.lParam );
 				}
 			}
-			// We may not have initialized these, but if they exist, delete them.
+			// We may not have initialized these, but if they exist, free/delete them.
 			if ( current_image != NULL )
 			{
-				delete[] current_image;
+				free( current_image );
 			}
 
 			if ( gdi_image != NULL )

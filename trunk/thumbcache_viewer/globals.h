@@ -34,6 +34,7 @@
 #include <commdlg.h>
 #include <wchar.h>
 #include <gdiplus.h>
+#include <process.h>
 
 #include "resource.h"
 
@@ -62,6 +63,10 @@
 #define MAX_SCALE_SIZE	25.0f
 
 #define MIN_COLUMN_SIZE	18
+
+#define SNAP_WIDTH		10;	// The minimum distance at which our windows will attach together.
+
+#define WM_PROPAGATE	WM_APP
 
 // Thumbcache header information.
 struct database_header
@@ -103,12 +108,12 @@ struct database_cache_entry_vista
 	long long header_checksum;
 };
 
-// This structure holds information obtained as we read the database. It's passed as an lparam to our listview items.
+// This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
 struct fileinfo
 {
 	unsigned int offset;				// Offset in database.
 	unsigned int size;					// Size of file.
-	wchar_t dbpath[ MAX_PATH + 1 ];		// Path to the database file.
+	wchar_t dbpath[ MAX_PATH ];			// Path to the database file.
 	unsigned int system;				// 0x14 = Windows Vista, 0x15 = Windows 7
 	char extension;						// 0 = bmp, 1 = jpg, 2 = png
 	wchar_t *filename;					// Name of the database entry.
@@ -124,15 +129,21 @@ LRESULT CALLBACK EditSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
 
+LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+
 bool is_close( int a, int b );
-void read_database( wchar_t &filepath );
+unsigned __stdcall read_database( void *pArguments );
+//void read_database( wchar_t &filepath );
 
 // These are all variables that are shared among the separate .cpp files.
 
 // Object handles.
 extern HWND g_hWnd_main;			// Handle to our main window.
 extern HWND g_hWnd_image;			// Handle to our image window.
+extern HWND g_hWnd_prompt;			// Handle to our prompt window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
+
+extern HANDLE prompt_mutex;			// Blocks read_database() until the g_hWnd_prompt is destroyed.
 
 extern HFONT hFont;					// Handle to the system's message font.
 
@@ -142,6 +153,10 @@ extern HICON hIcon_png;				// Handle to the system's .png icon.
 
 extern HMENU g_hMenu;				// Handle to our menu bar.
 extern HMENU g_hMenuSub_context;	// Handle to our context menu.
+
+extern bool cancelled_prompt;		// User cancelled the prompt.
+extern unsigned int entry_begin;	// Beginning position to start reading.
+extern unsigned int entry_end;		// Ending position to stop reading.
 
 // Window variables
 extern RECT last_dim;				// Keeps track of the image window's dimension before it gets minimized.
