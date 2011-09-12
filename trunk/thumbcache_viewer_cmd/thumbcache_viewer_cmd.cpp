@@ -21,12 +21,13 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <wchar.h>
 
 // Magic identifiers for various image formats.
-#define FILETYPE_BMP	"BM"
-#define FILETYPE_JPEG	"\xFF\xD8\xFF\xE0"
-#define FILETYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
+#define FILE_TYPE_BMP	"BM"
+#define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
+#define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 
 // Database version.
 #define WINDOWS_VISTA	0x14
@@ -75,7 +76,7 @@ struct database_cache_entry_vista
 int main( int argc, char *argv[] )
 {
 	// Ask user for input filename.
-	char name[ MAX_PATH + 1 ] = { 0 };
+	char name[ MAX_PATH ] = { 0 };
 	if ( argc == 1 )
 	{
 		printf( "Please enter the name of the database: " );
@@ -154,13 +155,13 @@ int main( int argc, char *argv[] )
 		}
 
 		// Offset to the first cache entry.
-		printf( "Offset to first cache entry: %d bytes\n", dh.first_cache_entry );
+		printf( "Offset to first cache entry: %lu bytes\n", dh.first_cache_entry );
 
 		// Offset to the available cache entry.
-		printf( "Offset to available cache entry: %d bytes\n", dh.available_cache_entry );
+		printf( "Offset to available cache entry: %lu bytes\n", dh.available_cache_entry );
 
 		// Number of cache entries.
-		printf( "Number of cache entries: %d\n", dh.number_of_cache_entries );
+		printf( "Number of cache entries: %lu\n", dh.number_of_cache_entries );
 
 		// Set the file pointer to the first available cache entry.
 		unsigned int file_position = SetFilePointer( hFile, dh.first_cache_entry, NULL, FILE_BEGIN );
@@ -176,7 +177,7 @@ int main( int argc, char *argv[] )
 		for ( unsigned int i = 0; i < dh.number_of_cache_entries; i++ )
 		{
 			printf( "\n---------------------------------------------\n" );
-			printf( "Extracting cache entry %d at %ld bytes.\n", i + 1, file_position );
+			printf( "Extracting cache entry %lu at %lu bytes.\n", i + 1, file_position );
 			printf( "---------------------------------------------\n" );
 
 			void *database_cache_entry = NULL;
@@ -184,13 +185,13 @@ int main( int argc, char *argv[] )
 			// Determine the type of database we're working with and store its content in the correct structure.
 			if ( dh.version == WINDOWS_7 )
 			{
-				database_cache_entry = new database_cache_entry_7;
+				database_cache_entry = ( database_cache_entry_7 * )malloc( sizeof( database_cache_entry_7 ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_7 ), &read, NULL );
 				
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
 				if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_7 ) )
 				{
-					delete database_cache_entry;
+					free( database_cache_entry );
 					CloseHandle( hFile );
 					printf( "Database is not supported.\n" );
 					return 0;
@@ -198,13 +199,13 @@ int main( int argc, char *argv[] )
 			}
 			else if ( dh.version == WINDOWS_VISTA )
 			{
-				database_cache_entry = new database_cache_entry_vista;
+				database_cache_entry = ( database_cache_entry_vista * )malloc( sizeof( database_cache_entry_vista ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_vista ), &read, NULL );
 				
 				// Make sure it's a thumbcache database and the stucture was filled correctly.
 				if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_cache_entry_vista ) )
 				{
-					delete database_cache_entry;
+					free( database_cache_entry );
 					CloseHandle( hFile );
 					printf( "Database is not supported.\n" );
 					return 0;
@@ -218,7 +219,7 @@ int main( int argc, char *argv[] )
 
 			// Cache size includes the 4 byte signature and itself ( 4 bytes ).
 			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size );		
-			printf( "Cache size: %d bytes\n", cache_entry_size );
+			printf( "Cache size: %lu bytes\n", cache_entry_size );
 
 			long long entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
 
@@ -230,7 +231,7 @@ int main( int argc, char *argv[] )
 
 			// The entry hash may be the same as the filename.
 			wchar_t s_entry_hash[ 19 ] = { 0 };
-			swprintf( s_entry_hash, 19, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
+			swprintf_s( s_entry_hash, 19, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
 			wprintf_s( L"Entry hash: %s\n", s_entry_hash );
 
 			// Windows Vista
@@ -242,15 +243,15 @@ int main( int argc, char *argv[] )
 
 			// The length of our filename.
 			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
-			printf( "Identifier string size: %d bytes\n", filename_length );
+			printf( "Identifier string size: %lu bytes\n", filename_length );
 
 			// Padding size.
 			unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size );
-			printf( "Padding size: %d bytes\n", padding_size );
+			printf( "Padding size: %lu bytes\n", padding_size );
 
 			// The size of our data.
 			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size );
-			printf( "Data size: %d bytes\n", data_size );
+			printf( "Data size: %lu bytes\n", data_size );
 
 			// Unknown value.
 			unsigned int unknown = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->unknown : ( ( database_cache_entry_vista * )database_cache_entry )->unknown );
@@ -266,7 +267,7 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 data checksum.
 			wchar_t s_data_checksum[ 19 ] = { 0 };
-			swprintf( s_data_checksum, 19, L"0x%08x%08x", data_checksum, data_checksum + 4 );
+			swprintf_s( s_data_checksum, 19, L"0x%08x%08x", data_checksum, data_checksum + 4 );
 			wprintf_s( L"Data checksum (CRC-64): %s\n", s_data_checksum );
 
 			long long header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
@@ -279,82 +280,124 @@ int main( int argc, char *argv[] )
 
 			// CRC-64 header checksum.
 			wchar_t s_header_checksum[ 19 ] = { 0 };
-			swprintf( s_header_checksum, 19, L"0x%08x%08x", header_checksum, header_checksum + 4 );
+			swprintf_s( s_header_checksum, 19, L"0x%08x%08x", header_checksum, header_checksum + 4 );
 			wprintf_s( L"Header checksum (CRC-64): %s\n", s_header_checksum );
 
+			// It's unlikely that a filename will be longer than MAX_PATH, but to be on the safe side, we should truncate it if it is.
+			unsigned short filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * MAX_PATH ) );
+
 			// UTF-16 filename. Allocate the filename length plus 5 for the unicode extension and null character.
-			char *filename = new char[ sizeof( char ) * filename_length + ( sizeof( wchar_t ) * 5 ) ];
-			memset( filename, 0, sizeof( char ) * filename_length + ( sizeof( wchar_t ) * 5 ) );
-			ReadFile( hFile, filename, sizeof( char ) * filename_length, &read, NULL );
+			wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
+			memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
+			ReadFile( hFile, filename, filename_truncate_length, &read, NULL );
 			if ( read == 0 )
 			{
-				delete database_cache_entry;
+				free( filename );
+				free( database_cache_entry );
 				CloseHandle( hFile );
 				printf( "End of file reached. There are no more valid entires.\n" );
 				return 0;
 			}
 
+			// Adjust our file pointer if we truncated the filename. This really shouldn't happen unless someone tampered with the database, or it became corrupt.
+			if ( filename_length > filename_truncate_length )
+			{
+				// Offset the file pointer and see if we've moved beyond the EOF.
+				file_position = SetFilePointer( hFile, filename_length - filename_truncate_length, 0, FILE_CURRENT );
+				if ( file_position == INVALID_SET_FILE_POINTER )
+				{
+					free( filename );
+					free( database_cache_entry );
+					CloseHandle( hFile );
+					printf( "End of file reached. There are no more valid entires.\n" );
+					return 0;
+				}
+			}
+
 			// This will set our file pointer to the beginning of the data entry.
 			file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
+			if ( file_position == INVALID_SET_FILE_POINTER )
+			{
+				free( filename );
+				free( database_cache_entry );
+				CloseHandle( hFile );
+				printf( "End of file reached. There are no more valid entires.\n" );
+				return 0;
+			}
 
+			// Retrieve the data content.
+			char *buf = NULL;
+			
 			if ( data_size != 0 )
 			{
-				// Retrieve the data content.
-				char *buf = new char[ sizeof( char ) * data_size ];
-				memset( buf, 0, sizeof( char ) * data_size );
+				buf = ( char * )malloc( sizeof( char ) * data_size );
 				ReadFile( hFile, buf, data_size, &read, NULL );
 				if ( read == 0 )
 				{
-					delete database_cache_entry;
+					free( buf );
+					free( filename );
+					free( database_cache_entry );
 					CloseHandle( hFile );
 					printf( "End of file reached. There are no more valid entires.\n" );
 					return 0;
 				}
 
-				// Look at the magic identifiers for the buffer and determine the file extension to append to our filename.
-				if ( memcmp( buf, FILETYPE_BMP, 2 ) == 0 )
+				// Detect the file extension and copy it into the filename string.
+				if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
 				{
-					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".bmp" );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".bmp", 5 );
 				}
-				else if ( memcmp( buf, FILETYPE_JPEG, 4 ) == 0 )
+				else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
 				{
-					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".jpg" );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".jpg", 5 );
 				}
-				else if ( memcmp( buf, FILETYPE_PNG, 8 ) == 0 )
+				else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
 				{
-					wcscat_s( ( wchar_t * )filename + wcslen( ( wchar_t * )filename ), 5, L".png" );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".png", 5 );
 				}
-
-				wprintf_s( L"Identifier string: %s\n", ( wchar_t * )filename );
-
-				// Output the data with the given (UTF-16) filename.
-				printf( "---------------------------------------------\n" );
-				printf( "Writing data to file.\n" );
-				printf( "---------------------------------------------\n" );
-
-				// Attempt to save the buffer to a file.
-				HANDLE hFile_save = CreateFile( ( wchar_t * )filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
-				if ( hFile_save != INVALID_HANDLE_VALUE )
+				else if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
 				{
-					DWORD written = 0;
-					WriteFile( hFile_save, buf, data_size, &written, NULL );
-					CloseHandle( hFile_save );
-					printf( "Writing complete.\n" );
+					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
 				}
-				else
-				{
-					printf( "Writing failed.\n" );
-				}
-				printf( "---------------------------------------------\n" );
-
-				// Delete our data buffer.
-				delete[] buf;
 			}
+			else
+			{
+				// Windows Vista thumbcache files should include the extension.
+				if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )
+				{
+					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
+				}
+			}
+
+			wprintf_s( L"Identifier string: %s\n", filename );
+
+			// Output the data with the given (UTF-16) filename.
+			printf( "---------------------------------------------\n" );
+			printf( "Writing data to file.\n" );
+
+			// Attempt to save the buffer to a file.
+			HANDLE hFile_save = CreateFile( filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+			if ( hFile_save != INVALID_HANDLE_VALUE )
+			{
+				DWORD written = 0;
+				WriteFile( hFile_save, buf, data_size, &written, NULL );
+				CloseHandle( hFile_save );
+				printf( "Writing complete.\n" );
+			}
+			else
+			{
+				printf( "Writing failed.\n" );
+			}
+			printf( "---------------------------------------------\n" );
+
+			// Delete our data buffer.
+			free( buf );
+
 			// Delete our filename.
-			delete[] filename;
+			free( filename );
 
 			// Delete our database cache entry.
-			delete database_cache_entry;
+			free( database_cache_entry );
 		}
 		// Close the input file.
 		CloseHandle( hFile );
