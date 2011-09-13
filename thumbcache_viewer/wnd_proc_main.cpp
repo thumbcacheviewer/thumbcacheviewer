@@ -724,8 +724,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// Item count will be 1 since the item hasn't yet been deleted.
 					if ( SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) == 1 )
 					{
-						// Disable the Select All menu.
+						// Disable the menus that require at least one item in the list.
+						EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_DISABLED );
+						EnableMenuItem( g_hMenu, MENU_SAVE_SEL, MF_DISABLED );
+						EnableMenuItem( g_hMenu, MENU_REMOVE_SEL, MF_DISABLED );
 						EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_DISABLED );
+						EnableMenuItem( g_hMenuSub_context, MENU_SAVE_SEL, MF_DISABLED );
+						EnableMenuItem( g_hMenuSub_context, MENU_REMOVE_SEL, MF_DISABLED );
 						EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_DISABLED );
 					}
 				}
