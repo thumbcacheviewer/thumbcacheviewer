@@ -479,7 +479,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 								// Attempt to open a file for reading.
-								HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+								HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 								if ( hFile != INVALID_HANDLE_VALUE )
 								{
 									DWORD read = 0;
@@ -796,7 +796,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					current_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 					// Attempt to open a file for reading.
-					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 					if ( hFile != INVALID_HANDLE_VALUE )
 					{
 						DWORD read = 0;

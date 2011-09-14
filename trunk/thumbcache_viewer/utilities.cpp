@@ -41,7 +41,7 @@ unsigned __stdcall read_database( void *pArguments )
 	wchar_t *filepath = ( wchar_t * )pArguments;
 
 	// Attempt to open our database file.
-	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 	if ( hFile != INVALID_HANDLE_VALUE )
 	{
 		DWORD read = 0;
@@ -420,7 +420,7 @@ unsigned __stdcall read_database( void *pArguments )
 	}
 	else
 	{
-		// If this occurs, then there's something wrong with the user's system. Or maybe the file is locked?
+		// If this occurs, then there's something wrong with the user's system.
 		MessageBox( g_hWnd_main, L"The database file failed to open.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 	}
 
