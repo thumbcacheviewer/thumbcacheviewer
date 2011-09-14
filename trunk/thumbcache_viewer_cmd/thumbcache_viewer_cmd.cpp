@@ -91,7 +91,7 @@ int main( int argc, char *argv[] )
 	printf( "Attempting to open the database file\n" );
 
 	// Attempt to open our database file.
-	HANDLE hFile = CreateFileA( name, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+	HANDLE hFile = CreateFileA( name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 	if ( hFile != INVALID_HANDLE_VALUE )
 	{
 		DWORD read = 0;
