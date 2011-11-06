@@ -124,7 +124,7 @@ unsigned __stdcall read_database( void *pArguments )
 				free( filepath );
 
 				wchar_t msg[ 21 ] = { 0 };
-				swprintf_s( msg, 21, L"Invalid cache entry.", current_position );
+				swprintf_s( msg, 21, L"Invalid cache entry." );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 				_endthreadex( 0 );
