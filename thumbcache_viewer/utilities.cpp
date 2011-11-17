@@ -238,9 +238,9 @@ unsigned __stdcall read_database( void *pArguments )
 			// It's unlikely that a filename will be longer than MAX_PATH, but to be on the safe side, we should truncate it if it is.
 			unsigned short filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * MAX_PATH ) );
 			
-			// UTF-16 filename. Allocate the filename length plus 5 for the unicode extension and null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
-			wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
-			memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
+			// UTF-16 filename. Allocate the filename length plus 6 for the unicode extension and null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
+			wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
+			memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
 			ReadFile( hFile, filename, filename_truncate_length, &read, NULL );
 			if ( read == 0 )
 			{
@@ -363,22 +363,23 @@ unsigned __stdcall read_database( void *pArguments )
 				// Detect the file extension and copy it into the filename string.
 				if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".bmp", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".bmp", 4 );
 					fi->extension = 0;
 				}
 				else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".jpg", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".jpg", 4 );
 					fi->extension = 1;
 				}
 				else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".png", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".png", 4 );
 					fi->extension = 2;
 				}
-				else if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
+				else if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
 				{
-					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
 					fi->extension = 3;	// Unknown extension
 				}
 
@@ -388,9 +389,10 @@ unsigned __stdcall read_database( void *pArguments )
 			else	// No data exists.
 			{
 				// Windows Vista thumbcache files should include the extension.
-				if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )
+				if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )
 				{
-					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
 				}
 
 				fi->extension = 3;	// Unknown extension
