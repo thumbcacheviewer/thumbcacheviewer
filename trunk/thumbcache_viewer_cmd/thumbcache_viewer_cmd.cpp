@@ -169,7 +169,7 @@ int main( int argc, char *argv[] )
 		{
 			// The file pointer reached the EOF.
 			CloseHandle( hFile );
-			printf( "End of file reached. There are no more entires.\n" );
+			printf( "End of file reached. There are no more entries.\n" );
 			return 0;
 		}
 
@@ -186,7 +186,7 @@ int main( int argc, char *argv[] )
 			{
 				// EOF reached.
 				CloseHandle( hFile );
-				printf( "End of file reached. There are no more entires.\n" );
+				printf( "End of file reached. There are no more entries.\n" );
 				return 0;
 			}
 
@@ -204,7 +204,7 @@ int main( int argc, char *argv[] )
 					// EOF reached.
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "End of file reached. There are no more entires.\n" );
+					printf( "End of file reached. There are no more entries.\n" );
 					return 0;
 				}
 				else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
@@ -226,7 +226,7 @@ int main( int argc, char *argv[] )
 					// EOF reached.
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "End of file reached. There are no more entires.\n" );
+					printf( "End of file reached. There are no more entries.\n" );
 					return 0;
 				}
 				else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
@@ -279,7 +279,7 @@ int main( int argc, char *argv[] )
 			if ( dh.version == WINDOWS_VISTA )
 			{
 				// UTF-16 file extension.
-				wprintf_s( L"File extension: %s\n", ( ( database_cache_entry_vista * )database_cache_entry )->extension );
+				wprintf_s( L"File extension: %.4s\n", ( ( database_cache_entry_vista * )database_cache_entry )->extension );
 			}
 
 			printf( "Identifier string size: %lu bytes\n", filename_length );
@@ -325,16 +325,16 @@ int main( int argc, char *argv[] )
 			// It's unlikely that a filename will be longer than MAX_PATH, but to be on the safe side, we should truncate it if it is.
 			unsigned short filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * MAX_PATH ) );
 
-			// UTF-16 filename. Allocate the filename length plus 5 for the unicode extension and null character.
-			wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
-			memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 5 ) );
+			// UTF-16 filename. Allocate the filename length plus 6 for the unicode extension and null character.
+			wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
+			memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
 			ReadFile( hFile, filename, filename_truncate_length, &read, NULL );
 			if ( read == 0 )
 			{
 				free( filename );
 				free( database_cache_entry );
 				CloseHandle( hFile );
-				printf( "End of file reached. There are no more valid entires.\n" );
+				printf( "End of file reached. There are no more valid entries.\n" );
 				return 0;
 			}
 
@@ -350,7 +350,7 @@ int main( int argc, char *argv[] )
 					free( filename );
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "End of file reached. There are no more valid entires.\n" );
+					printf( "End of file reached. There are no more valid entries.\n" );
 					return 0;
 				}
 			}
@@ -362,7 +362,7 @@ int main( int argc, char *argv[] )
 				free( filename );
 				free( database_cache_entry );
 				CloseHandle( hFile );
-				printf( "End of file reached. There are no more valid entires.\n" );
+				printf( "End of file reached. There are no more valid entries.\n" );
 				return 0;
 			}
 
@@ -379,34 +379,36 @@ int main( int argc, char *argv[] )
 					free( filename );
 					free( database_cache_entry );
 					CloseHandle( hFile );
-					printf( "End of file reached. There are no more valid entires.\n" );
+					printf( "End of file reached. There are no more valid entries.\n" );
 					return 0;
 				}
 
 				// Detect the file extension and copy it into the filename string.
 				if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".bmp", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".bmp", 4 );
 				}
 				else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".jpg", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".jpg", 4 );
 				}
 				else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
 				{
-					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".png", 5 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".png", 4 );
 				}
-				else if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
+				else if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
 				{
-					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
 				}
 			}
 			else
 			{
 				// Windows Vista thumbcache files should include the extension.
-				if ( dh.version == WINDOWS_VISTA && wcslen( ( ( database_cache_entry_vista * )database_cache_entry )->extension ) > 0 )
+				if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )
 				{
-					swprintf_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 5, L".%s", ( ( database_cache_entry_vista * )database_cache_entry )->extension ); 
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
+					wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 ); 
 				}
 			}
 
