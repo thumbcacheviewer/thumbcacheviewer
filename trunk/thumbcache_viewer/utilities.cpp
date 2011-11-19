@@ -36,6 +36,46 @@ bool is_close( int a, int b )
 	return abs( a - b ) < SNAP_WIDTH;
 }
 
+bool scan_memory( HANDLE hFile, unsigned int &offset )
+{
+	// Allocate a 100 kilobyte chunk of memory to scan. This value is arbitrary.
+	char *buf = ( char * )malloc( sizeof( char ) * 102400 );
+	char *scan = NULL;
+	DWORD read = 0;
+
+	while ( true )
+	{
+		// Begin reading through the database.
+		ReadFile( hFile, buf, sizeof( char ) * 102400, &read, NULL );
+		if ( read == 0 )
+		{
+			free( buf );
+			return false;
+		}
+
+		// Binary string search. Look for the magic identifier.
+		scan = buf;
+		while ( read-- > 4 && memcmp( scan++, "CMMM", 4 ) != 0 )
+		{
+			++offset;
+		}
+
+		// If it's not found, then we'll keep scanning.
+		if ( read < 4 )
+		{
+			// Adjust the offset back 4 characters (in case we truncated the magic identifier when reading).
+			SetFilePointer( hFile, offset, NULL, FILE_BEGIN );
+			// Keep scanning.
+			continue;
+		}
+
+		break;
+	}
+
+	free( buf );
+	return true;
+}
+
 unsigned __stdcall read_database( void *pArguments )
 {
 	wchar_t *filepath = ( wchar_t * )pArguments;
@@ -152,12 +192,24 @@ unsigned __stdcall read_database( void *pArguments )
 				else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
+
+					wchar_t msg[ 95 ] = { 0 };
+					swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
+					if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
+					{
+						// Walk back to the end of the last cache entry.
+						current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+
+						// If we found the beginning of the entry, attempt to read it again.
+						if ( scan_memory( hFile, current_position ) == true )
+						{
+							--i;
+							continue;
+						}
+					}
+
 					CloseHandle( hFile );
 					free( filepath );
-
-					wchar_t msg[ 49 ] = { 0 };
-					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 					_endthreadex( 0 );
 					return 0;
@@ -181,12 +233,24 @@ unsigned __stdcall read_database( void *pArguments )
 				else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
+
+					wchar_t msg[ 95 ] = { 0 };
+					swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
+					if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
+					{
+						// Walk back to the end of the last cache entry.
+						current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+
+						// If we found the beginning of the entry, attempt to read it again.
+						if ( scan_memory( hFile, current_position ) == true )
+						{
+							--i;
+							continue;
+						}
+					}
+
 					CloseHandle( hFile );
 					free( filepath );
-
-					wchar_t msg[ 49 ] = { 0 };
-					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
 					_endthreadex( 0 );
 					return 0;
