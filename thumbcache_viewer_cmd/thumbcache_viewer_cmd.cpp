@@ -73,6 +73,46 @@ struct database_cache_entry_vista
 	long long header_checksum;
 };
 
+bool scan_memory( HANDLE hFile, unsigned int &offset )
+{
+	// Allocate a 100 kilobyte chunk of memory to scan. This value is arbitrary.
+	char *buf = ( char * )malloc( sizeof( char ) * 102400 );
+	char *scan = NULL;
+	DWORD read = 0;
+
+	while ( true )
+	{
+		// Begin reading through the database.
+		ReadFile( hFile, buf, sizeof( char ) * 102400, &read, NULL );
+		if ( read == 0 )
+		{
+			free( buf );
+			return false;
+		}
+
+		// Binary string search. Look for the magic identifier.
+		scan = buf;
+		while ( read-- > 4 && memcmp( scan++, "CMMM", 4 ) != 0 )
+		{
+			++offset;
+		}
+
+		// If it's not found, then we'll keep scanning.
+		if ( read < 4 )
+		{
+			// Adjust the offset back 4 characters (in case we truncated the magic identifier when reading).
+			SetFilePointer( hFile, offset, NULL, FILE_BEGIN );
+			// Keep scanning.
+			continue;
+		}
+
+		break;
+	}
+
+	free( buf );
+	return true;
+}
+
 int main( int argc, char *argv[] )
 {
 	// Ask user for input filename.
@@ -210,8 +250,25 @@ int main( int argc, char *argv[] )
 				else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
+
+					printf( "Invalid cache entry located at %lu bytes.\n", current_position );
+					printf( "Attempting to scan for next entry.\n" );
+
+					// Walk back to the end of the last cache entry.
+					current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+
+					// If we found the beginning of the entry, attempt to read it again.
+					if ( scan_memory( hFile, current_position ) == true )
+					{
+						printf( "A valid entry has been found.\n" );
+						printf( "---------------------------------------------\n" );
+						--i;
+						continue;
+					}
+
+					printf( "Scan failed to find any valid entries.\n" );
+					printf( "---------------------------------------------\n" );
 					CloseHandle( hFile );
-					printf( "Invalid cache entry located at %lu bytes.", current_position );
 					return 0;
 				}
 			}
@@ -232,8 +289,25 @@ int main( int argc, char *argv[] )
 				else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
 				{
 					free( database_cache_entry );
+
+					printf( "Invalid cache entry located at %lu bytes.\n", current_position );
+					printf( "Attempting to scan for next entry.\n" );
+
+					// Walk back to the end of the last cache entry.
+					current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+
+					// If we found the beginning of the entry, attempt to read it again.
+					if ( scan_memory( hFile, current_position ) == true )
+					{
+						printf( "A valid entry has been found.\n" );
+						printf( "---------------------------------------------\n" );
+						--i;
+						continue;
+					}
+
+					printf( "Scan failed to find any valid entries.\n" );
+					printf( "---------------------------------------------\n" );
 					CloseHandle( hFile );
-					printf( "Invalid cache entry located at %lu bytes.", current_position );
 					return 0;
 				}
 			}
