@@ -17,8 +17,9 @@
 */
 
 #include "globals.h"
+#include <stdio.h>
 
-#define MIN_COLUMN_SIZE	18
+#define NUM_COLUMNS 9
 
 WNDPROC EditProc = NULL;			// Subclassed listview edit window.
 
@@ -52,8 +53,147 @@ RECT last_dim = { 0 };				// Keeps track of the image window's dimension before 
 
 // Image variables
 fileinfo *current_fileinfo = NULL;	// Holds information about the currently selected image. Gets deleted in WM_DESTROY.
-char *current_image = NULL;			// Buffer that stores our image and is used to write our files.
 Gdiplus::Image *gdi_image = NULL;	// GDI+ image object. We need it to handle .png and .jpg images.
+
+int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
+{
+	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
+	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
+	char checksum1[ 17 ], checksum2[ 17 ];
+
+	// We added NUM_COLUMNS to the lParamSort value in order to distinguish between items we want to sort up, and items we want to sort down.
+	// Saves us from having to pass some arbitrary struct pointer.
+	if ( lParamSort >= NUM_COLUMNS )	// Up
+	{
+		switch ( lParamSort % NUM_COLUMNS )
+		{
+			case 1:
+			{
+				return _wcsicmp( fi1->filename, fi2->filename );
+			}
+			break;
+
+			case 2:
+			{
+				return ( fi1->size > fi2->size );
+			}
+			break;
+
+			case 3:
+			{
+				return ( fi1->offset > fi2->offset );
+			}
+			break;
+
+			case 4:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->data_checksum, fi1->data_checksum + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->data_checksum, fi2->data_checksum + 4 );
+				return strcmp( checksum1, checksum2 );
+			}
+			break;
+
+			case 5:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->header_checksum, fi1->header_checksum + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->header_checksum, fi2->header_checksum + 4 );
+				return strcmp( checksum1, checksum2 );
+			}
+			break;
+
+			case 6:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->entry_hash, fi1->entry_hash + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->entry_hash, fi2->entry_hash + 4 );
+				return strcmp( checksum1, checksum2 );
+			}
+			break;
+
+			case 7:
+			{
+				return ( fi1->si->system < fi2->si->system );	// 7 before Vista when sorting up.
+			}
+			break;
+
+			case 8:
+			{
+				return _wcsicmp( fi1->si->dbpath, fi2->si->dbpath );
+			}
+			break;
+
+			default:
+			{
+				return 0;
+			}
+			break;
+		}	
+	}
+	else	// Down
+	{
+		switch ( lParamSort )
+		{
+			case 1:
+			{
+				return _wcsicmp( fi2->filename, fi1->filename );
+			}
+			break;
+
+			case 2:
+			{
+				return ( fi2->size > fi1->size );
+			}
+			break;
+
+			case 3:
+			{
+				return ( fi2->offset > fi1->offset );
+			}
+			break;
+
+			case 4:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->data_checksum, fi1->data_checksum + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->data_checksum, fi2->data_checksum + 4 );
+				return strcmp( checksum2, checksum1 );
+			}
+			break;
+
+			case 5:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->header_checksum, fi1->header_checksum + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->header_checksum, fi2->header_checksum + 4 );
+				return strcmp( checksum2, checksum1 );
+			}
+			break;
+
+			case 6:
+			{
+				sprintf_s( checksum1, 17, "%08x%08x", fi1->entry_hash, fi1->entry_hash + 4 );
+				sprintf_s( checksum2, 17, "%08x%08x", fi2->entry_hash, fi2->entry_hash + 4 );
+				return strcmp( checksum2, checksum1 );
+			}
+			break;
+
+			case 7:
+			{
+				return ( fi2->si->system < fi1->si->system ); // Vista before 7 when sorting down.
+			}
+			break;
+
+			case 8:
+			{
+				return _wcsicmp( fi2->si->dbpath, fi1->si->dbpath );
+			}
+			break;
+
+			default:
+			{
+				return 0;
+			}
+			break;
+		}
+	}
+}
 
 LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
@@ -410,15 +550,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						ofn.nMaxFile = MAX_PATH;
 						ofn.lpstrTitle = L"Open a Thumbcache Database file";
 						ofn.Flags = OFN_READONLY;
+						ofn.hwndOwner = hWnd;
 
 						// Display the Open File dialog box
 						if( GetOpenFileName( &ofn ) )
 						{
+							// filepath will be freed in the thread.
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )filepath, 0, NULL ) );
-							break;
 						}
-						
-						free( filepath );
+						else
+						{
+							free( filepath );
+						}
 					}
 					break;
 
@@ -479,7 +622,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 								// Attempt to open a file for reading.
-								HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+								HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 								if ( hFile != INVALID_HANDLE_VALUE )
 								{
 									DWORD read = 0;
@@ -497,9 +640,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 									HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 									if ( hFile_save != INVALID_HANDLE_VALUE )
 									{
-										// Write the buffer to our file.
+										// Write the buffer to our file. Only write what we've read.
 										DWORD dwBytesWritten = 0;
-										WriteFile( hFile_save, save_image, ( ( fileinfo * )lvi.lParam )->size, &dwBytesWritten, NULL );
+										WriteFile( hFile_save, save_image, read, &dwBytesWritten, NULL );
 
 										CloseHandle( hFile_save );
 									}
@@ -552,12 +695,20 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								free( ( fileinfo * )lvi.lParam );
 							}
 
+							// Free our linked list of shared info.
+							cleanup();
+
 							SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
 						}
 						else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
 						{
 							for ( int i = num_items - 1; i >= 0; --i )
 							{
+								// Scroll to the first selected item.
+								// This will reduce the time it takes to remove a large selection of items.
+								// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
+								SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_SELECTED ), FALSE );
+
 								// See if the item is selected.
 								if ( SendMessage( g_hWnd_list, LVM_GETITEMSTATE, i, LVIS_SELECTED ) == LVIS_SELECTED )
 								{
@@ -566,6 +717,36 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 									lvi.mask = LVIF_PARAM;
 									lvi.iItem = i;
 									SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+									( ( fileinfo * )lvi.lParam )->si->count--;
+
+									// Remove our shared information from the linked list if there's no more items for this database.
+									if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+									{
+										shared_info_linked_list *si = g_si;
+										shared_info_linked_list *last_si = NULL;
+										while ( si != NULL )
+										{
+											// Two pointers are guaranteed to be equal if they are of the same type and point to the same object.
+											if ( si->dbpath == ( ( fileinfo * )lvi.lParam )->si->dbpath )
+											{
+												if ( last_si != NULL ) // The info is somewhere in the middle of the linked list.
+												{
+													last_si->next = si->next;
+												}
+												else	// The info is at the beginning.
+												{
+													g_si = si->next;
+												}
+
+												free( si );
+
+												break;
+											}
+											last_si = si;
+											si = si->next;
+										}
+									}
 									
 									// Free our filename, then fileinfo structure.
 									free( ( ( fileinfo * )lvi.lParam )->filename );
@@ -670,42 +851,91 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				}
 				break;
 
-				case HDN_ITEMCLICK:
+				case LVN_COLUMNCLICK:
 				{
-					if ( ( ( LPNMHEADER )lParam )->iItem == 2 )			// Change the size column info.
+					// Change the format of the items in the column if Ctrl is held while clicking the column.
+					if ( GetKeyState( VK_CONTROL ) & 0x8000 )
 					{
-						is_kbytes_size = !is_kbytes_size;
-						InvalidateRect( g_hWnd_list, NULL, TRUE );
-					}
-					else if ( ( ( LPNMHEADER )lParam )->iItem == 3 )	// Change the database location column info.
-					{
-						is_kbytes_offset = !is_kbytes_offset;
-						InvalidateRect( g_hWnd_list, NULL, TRUE );
-					}
-					else if ( ( ( LPNMHEADER )lParam )->iItem == 4 )	// Change the data checksum column info.
-					{
-						is_dc_lower = !is_dc_lower;
-						InvalidateRect( g_hWnd_list, NULL, TRUE );
-					}
-					else if ( ( ( LPNMHEADER )lParam )->iItem == 5 )	// Change the header checksum column info.
-					{
-						is_hc_lower = !is_hc_lower;
-						InvalidateRect( g_hWnd_list, NULL, TRUE );
-					}
-					else if ( ( ( LPNMHEADER )lParam )->iItem == 6 )	// Change the entry hash column info.
-					{
-						is_eh_lower = !is_eh_lower;
-						InvalidateRect( g_hWnd_list, NULL, TRUE );
-					}
-				}
-				break;
+						switch ( ( ( NMLISTVIEW * )lParam )->iSubItem )
+						{
+							case 2:	// Change the size column info.
+							{
+								is_kbytes_size = !is_kbytes_size;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
 
-				case HDN_ITEMCHANGING:
-				{
-					// Prevents all columns from being resized to less than MIN_COLUMN_SIZE.
-					if ( ( ( LPNMHEADER )lParam )->pitem->cxy <= MIN_COLUMN_SIZE )
+							case 3:	// Change the database location column info.
+							{
+								is_kbytes_offset = !is_kbytes_offset;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+
+							case 4:	// Change the data checksum column info.
+							{
+								is_dc_lower = !is_dc_lower;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+							
+							case 5:	// Change the header checksum column info.
+							{
+								is_hc_lower = !is_hc_lower;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+
+							case 6:	// Change the entry hash column info.
+							{
+								is_eh_lower = !is_eh_lower;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+						}
+					}
+					else	// Normal column click. Sort the items in the column.
 					{
-						return TRUE;
+						LVCOLUMN lvc = { NULL };
+						lvc.mask = LVCF_FMT;
+						SendMessage( g_hWnd_list, LVM_GETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+						
+						if ( HDF_SORTUP & lvc.fmt )	// Column is sorted upward.
+						{
+							// Sort down
+							lvc.fmt = lvc.fmt & ( ~HDF_SORTUP ) | HDF_SORTDOWN;
+							SendMessage( g_hWnd_list, LVM_SETCOLUMN, ( WPARAM )( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+
+							SendMessage( g_hWnd_list, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )( PFNLVCOMPARE )CompareFunc );
+						}
+						else if ( HDF_SORTDOWN & lvc.fmt )	// Column is sorted downward.
+						{
+							// Sort up
+							lvc.fmt = lvc.fmt & ( ~HDF_SORTDOWN ) | HDF_SORTUP;
+							SendMessage( g_hWnd_list, LVM_SETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+
+							SendMessage( g_hWnd_list, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem + NUM_COLUMNS, ( LPARAM )( PFNLVCOMPARE )CompareFunc );
+						}
+						else	// Column has no sorting set.
+						{
+							// Remove the sort format for all columns.
+							for ( int i = 0; i < NUM_COLUMNS; i++ )
+							{
+								// Get the current format
+								SendMessage( g_hWnd_list, LVM_GETCOLUMN, i, ( LPARAM )&lvc );
+								// Remove sort up and sort down
+								lvc.fmt = lvc.fmt & ( ~HDF_SORTUP ) & ( ~HDF_SORTDOWN );
+								SendMessage( g_hWnd_list, LVM_SETCOLUMN, i, ( LPARAM )&lvc );
+							}
+
+							// Read current the format from the clicked column
+							SendMessage( g_hWnd_list, LVM_GETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+							// Sort down to start.
+							lvc.fmt = lvc.fmt | HDF_SORTDOWN;
+							SendMessage( g_hWnd_list, LVM_SETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+
+							SendMessage( g_hWnd_list, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )( PFNLVCOMPARE )CompareFunc );
+						}
 					}
 				}
 				break;
@@ -780,6 +1010,12 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					EnableMenuItem( g_hMenu, MENU_SAVE_SEL, MF_ENABLED );
 					EnableMenuItem( g_hMenuSub_context, MENU_REMOVE_SEL, MF_ENABLED );
 					EnableMenuItem( g_hMenuSub_context, MENU_SAVE_SEL, MF_ENABLED );
+
+					// Only load images that are selected and in focus.
+					if ( nmlv->uNewState != ( LVIS_FOCUSED | LVIS_SELECTED ) )
+					{
+						break;
+					}
 					
 					// Retrieve the lParam value from the selected listview item.
 					LVITEM lvi = { NULL };
@@ -787,16 +1023,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.iItem = nmlv->iItem;
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-					// Free our image buffer if it already exists.
-					if ( current_image != NULL )
-					{
-						free( current_image );
-					}
 					// Create a buffer to read in our new bitmap.
-					current_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
+					char *current_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
 					// Attempt to open a file for reading.
-					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 					if ( hFile != INVALID_HANDLE_VALUE )
 					{
 						DWORD read = 0;
@@ -810,13 +1041,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						if ( gdi_image != NULL )
 						{
 							delete gdi_image;
+							gdi_image = NULL;
 						}
 
 						// Create a stream to store our buffer and then store the stream into a GDI+ image object.
 						ULONG written = 0;
 						IStream *is = NULL;
 						CreateStreamOnHGlobal( NULL, TRUE, &is );
-						is->Write( current_image, ( ( fileinfo * )lvi.lParam )->size, &written );
+						is->Write( current_image, read, &written );	// Only write what we've read.
 						gdi_image = new Gdiplus::Image( is );
 						is->Release();
 
@@ -884,6 +1116,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						// Force our window to repaint itself.
 						InvalidateRect( g_hWnd_image, NULL, TRUE );
 					}
+
+					// Free our image buffer.
+					free( current_image );
 				}
 				break;
 
@@ -922,8 +1157,12 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// Set our edit control's text to the list item's text.
 					SetWindowText( g_hWnd_edit, current_fileinfo->filename );
 
-					// Select all the text except the file extension (will be 4 characters long including the '.')
-					SendMessage( g_hWnd_edit, EM_SETSEL, 0, wcslen( current_fileinfo->filename ) - 4 );
+					// Get the length of the filename without the extension.
+					int ext_len = wcslen( current_fileinfo->filename );
+					while ( ext_len != 0 && current_fileinfo->filename[ --ext_len ] != L'.' );
+
+					// Select all the text except the file extension (if ext_len = 0, then everything is selected)
+					SendMessage( g_hWnd_edit, EM_SETSEL, 0, ext_len );
 
 					// Allow the edit to proceed.
 					return FALSE;
@@ -1011,7 +1250,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				int RIGHT_COLUMNS = 0;
 
 				// Loop through all the columns
-				for ( int i = 0; i <= 8; ++i )
+				for ( int i = 0; i < NUM_COLUMNS; ++i )
 				{
 					lvi.iSubItem = i;	// Set the column
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );	// Get the lParam value from our item.
@@ -1109,7 +1348,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						case 7:
 						{
-							if ( ( ( fileinfo * )lvi.lParam )->system == WINDOWS_7 )
+							if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 )
 							{
 								wcscpy_s( buf, MAX_PATH + 5, L"Windows 7" );
 							}
@@ -1122,7 +1361,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						case 8:
 						{
-							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->dbpath );
+							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->si->dbpath );
 						}
 						break;
 					}
@@ -1237,16 +1476,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					free( ( fileinfo * )lvi.lParam );
 				}
 			}
-			// We may not have initialized these, but if they exist, free/delete them.
-			if ( current_image != NULL )
-			{
-				free( current_image );
-			}
 
+			// Delete our image object.
 			if ( gdi_image != NULL )
 			{
 				delete gdi_image;
 			}
+
+			// Free our linked list of shared info.
+			cleanup();
 
 			PostQuitMessage( 0 );
 			return 0;

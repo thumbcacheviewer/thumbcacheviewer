@@ -404,7 +404,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			HDC hDC = BeginPaint( hWnd, &ps );
 
 			// Make sure we have an image to draw.
-			if ( current_image != NULL )
+			if ( gdi_image != NULL )
 			{
 				RECT rc = { 0 };
 				GetClientRect( hWnd, &rc );

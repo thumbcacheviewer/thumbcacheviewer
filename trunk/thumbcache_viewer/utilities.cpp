@@ -24,16 +24,33 @@
 
 #define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
 
+CRITICAL_SECTION open_cs;
 HANDLE prompt_mutex = NULL;
 
 bool cancelled_prompt = false;	// User cancelled the prompt.
 unsigned int entry_begin = 0;	// Beginning position to start reading.
 unsigned int entry_end = 0;		// Ending position to stop reading.
 
+shared_info_linked_list *g_si = NULL;	// Our linked list of shared information.
+
 bool is_close( int a, int b )
 {
 	// See if the distance between two points is less than the snap width.
 	return abs( a - b ) < SNAP_WIDTH;
+}
+
+void cleanup()
+{
+	shared_info_linked_list *si = g_si;
+	shared_info_linked_list *del_si = NULL;
+	while ( si != NULL )
+	{
+		del_si = si;
+		si = si->next;
+		free( del_si );
+	}
+
+	g_si = NULL;
 }
 
 bool scan_memory( HANDLE hFile, unsigned int &offset )
@@ -78,13 +95,19 @@ bool scan_memory( HANDLE hFile, unsigned int &offset )
 
 unsigned __stdcall read_database( void *pArguments )
 {
+	// This will block every other thread from entering until the first thread is complete.
+	// Protects our global variables.
+	EnterCriticalSection( &open_cs );
+
 	wchar_t *filepath = ( wchar_t * )pArguments;
 
 	// Attempt to open our database file.
 	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 	if ( hFile != INVALID_HANDLE_VALUE )
 	{
+		shared_info_linked_list *si = NULL;
 		DWORD read = 0;
+		unsigned int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
 
 		database_header dh = { 0 };
 		ReadFile( hFile, &dh, sizeof( database_header ), &read, NULL );
@@ -96,6 +119,9 @@ unsigned __stdcall read_database( void *pArguments )
 			free( filepath );
 
 			MessageBox( g_hWnd_main, L"The file is not a thumbcache database.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+
+			// We're done. Let other threads continue.
+			LeaveCriticalSection( &open_cs );
 
 			_endthreadex( 0 );
 			return 0;
@@ -111,6 +137,9 @@ unsigned __stdcall read_database( void *pArguments )
 			free( filepath );
 
 			MessageBox( g_hWnd_main, L"The first cache entry location is invalid.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+
+			// We're done. Let other threads continue.
+			LeaveCriticalSection( &open_cs );
 
 			_endthreadex( 0 );
 			return 0;
@@ -138,6 +167,9 @@ unsigned __stdcall read_database( void *pArguments )
 			{
 				CloseHandle( hFile );
 				free( filepath );
+
+				// We're done. Let other threads continue.
+				LeaveCriticalSection( &open_cs );
 
 				_endthreadex( 0 );
 				return 0;
@@ -167,6 +199,9 @@ unsigned __stdcall read_database( void *pArguments )
 				swprintf_s( msg, 21, L"Invalid cache entry." );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
+				// We're done. Let other threads continue.
+				LeaveCriticalSection( &open_cs );
+
 				_endthreadex( 0 );
 				return 0;
 			}
@@ -185,6 +220,9 @@ unsigned __stdcall read_database( void *pArguments )
 					free( database_cache_entry );
 					CloseHandle( hFile );
 					free( filepath );
+
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
 
 					_endthreadex( 0 );
 					return 0;
@@ -211,6 +249,9 @@ unsigned __stdcall read_database( void *pArguments )
 					CloseHandle( hFile );
 					free( filepath );
 
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
+
 					_endthreadex( 0 );
 					return 0;
 				}
@@ -226,6 +267,9 @@ unsigned __stdcall read_database( void *pArguments )
 					free( database_cache_entry );
 					CloseHandle( hFile );
 					free( filepath );
+
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
 
 					_endthreadex( 0 );
 					return 0;
@@ -252,6 +296,9 @@ unsigned __stdcall read_database( void *pArguments )
 					CloseHandle( hFile );
 					free( filepath );
 
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
+
 					_endthreadex( 0 );
 					return 0;
 				}
@@ -262,6 +309,9 @@ unsigned __stdcall read_database( void *pArguments )
 				free( filepath );
 
 				MessageBox( g_hWnd_main, L"The file is not supported by this program.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+
+				// We're done. Let other threads continue.
+				LeaveCriticalSection( &open_cs );
 
 				_endthreadex( 0 );
 				return 0;
@@ -317,6 +367,9 @@ unsigned __stdcall read_database( void *pArguments )
 				swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
+				// We're done. Let other threads continue.
+				LeaveCriticalSection( &open_cs );
+
 				_endthreadex( 0 );
 				return 0;
 			}
@@ -339,6 +392,9 @@ unsigned __stdcall read_database( void *pArguments )
 					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 					
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
+
 					_endthreadex( 0 );
 					return 0;
 				}
@@ -360,6 +416,9 @@ unsigned __stdcall read_database( void *pArguments )
 				swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 				MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
 
+				// We're done. Let other threads continue.
+				LeaveCriticalSection( &open_cs );
+
 				_endthreadex( 0 );
 				return 0;
 			}
@@ -371,7 +430,6 @@ unsigned __stdcall read_database( void *pArguments )
 			fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
 			fi->offset = file_position;
 			fi->size = data_size;
-			fi->system = dh.version;
 
 			long long entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
 			long long data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
@@ -404,9 +462,9 @@ unsigned __stdcall read_database( void *pArguments )
 			// Read any data that exists and get its file extension.
 			if ( data_size != 0 )
 			{
-				// Retrieve the data content. (Offsets the file pointer as well).
-				char *buf = ( char * )malloc( sizeof( char ) * data_size );
-				ReadFile( hFile, buf, data_size, &read, NULL );
+				// Retrieve the data content header. Our longest identifier is 8 bytes.
+				char *buf = ( char * )malloc( sizeof( char ) * 8 );
+				ReadFile( hFile, buf, 8, &read, NULL );
 				if ( read == 0 )
 				{
 					free( buf );
@@ -419,6 +477,9 @@ unsigned __stdcall read_database( void *pArguments )
 					wchar_t msg[ 49 ] = { 0 };
 					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
 					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+
+					// We're done. Let other threads continue.
+					LeaveCriticalSection( &open_cs );
 
 					_endthreadex( 0 );
 					return 0;
@@ -449,6 +510,9 @@ unsigned __stdcall read_database( void *pArguments )
 
 				// Free our data buffer.
 				free( buf );
+
+				// This will set our file pointer to the end of the data entry.
+				SetFilePointer( hFile, data_size - 8, 0, FILE_CURRENT );
 			}
 			else	// No data exists.
 			{
@@ -462,13 +526,31 @@ unsigned __stdcall read_database( void *pArguments )
 				fi->extension = 3;	// Unknown extension
 			}
 
-			wcscpy_s( fi->dbpath, MAX_PATH, filepath );
 			fi->filename = filename;	// Gets deleted during shutdown.
+
+			// Do this only once for each database, and only if we have an entry to add to the listview.
+			if ( si == NULL )
+			{
+				// This information is shared between entries within the database.
+				si = ( shared_info_linked_list * )malloc( sizeof( shared_info_linked_list ) );
+				si->next = g_si;
+				g_si = si;
+				
+				si->count = 0;
+				si->system = dh.version;
+				wcscpy_s( si->dbpath, MAX_PATH, filepath );
+			}
+
+			// Increase the number of items for our shared information.
+			si->count++;
+
+			// The operating system and database location is shared among each entry for the database. This will reduce the amount of memory used.
+			fi->si = si;
 
 			// Insert a row into our listview.
 			LVITEM lvi = { NULL };
 			lvi.mask = LVIF_PARAM; // Our listview items will display the text contained the lParam value.
-			lvi.iItem = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+			lvi.iItem = item_count++;
 			lvi.iSubItem = 0;
 			lvi.lParam = ( LPARAM )fi;
 			SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
@@ -477,7 +559,7 @@ unsigned __stdcall read_database( void *pArguments )
 			EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
 			EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_ENABLED );
 			EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_ENABLED );
-	
+
 			// Free our database cache entry.
 			free( database_cache_entry );
 		}
@@ -491,6 +573,9 @@ unsigned __stdcall read_database( void *pArguments )
 	}
 
 	free( filepath );
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &open_cs );
 
 	_endthreadex( 0 );
 	return 0;
