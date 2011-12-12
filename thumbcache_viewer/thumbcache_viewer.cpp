@@ -39,6 +39,9 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	// Initialize GDI+.
 	Gdiplus::GdiplusStartup( &gdiplusToken, &gdiplusStartupInput, NULL );
 
+	// Blocks our reading thread.
+	InitializeCriticalSection( &open_cs );
+
 	// Get the default message system font.
 	NONCLIENTMETRICS ncm = { NULL };
 	ncm.cbSize = sizeof( NONCLIENTMETRICS );
@@ -128,6 +131,9 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		TranslateMessage( &msg );
 		DispatchMessage( &msg );
 	}
+
+	// Delete our critical section.
+	DeleteCriticalSection( &open_cs );
 
 	// Shutdown GDI+
 	Gdiplus::GdiplusShutdown( gdiplusToken );

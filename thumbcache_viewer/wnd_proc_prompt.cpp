@@ -25,9 +25,6 @@ HWND g_hWnd_static_entries = NULL;
 HWND g_hWnd_begin = NULL;
 HWND g_hWnd_end = NULL;
 
-HWND g_hWnd_up_down1 = NULL;
-HWND g_hWnd_up_down2 = NULL;
-
 LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
     switch ( msg )
