@@ -21,7 +21,12 @@
 
 #define NUM_COLUMNS 9
 
+WNDPROC ListViewProc = NULL;		// Subclassed listview window.
 WNDPROC EditProc = NULL;			// Subclassed listview edit window.
+
+// Function prototypes.
+LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK EditSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
 // Object variables
 HWND g_hWnd_list = NULL;			// Handle to the listview control.
@@ -316,6 +321,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			g_hWnd_list = CreateWindow( WC_LISTVIEW, NULL, LVS_REPORT | LVS_EDITLABELS | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 0, 0, MIN_WIDTH, MIN_HEIGHT, hWnd, NULL, NULL, NULL );
 			SendMessage( g_hWnd_list, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_BORDERSELECT );
 
+			// Allow drag and drop for the listview.
+			DragAcceptFiles( g_hWnd_list, TRUE );
+
+			// Subclass our listview to receive WM_DROPFILES.
+			ListViewProc = ( WNDPROC )GetWindowLong( g_hWnd_list, GWL_WNDPROC );
+			SetWindowLong( g_hWnd_list, GWL_WNDPROC, ( LONG )ListViewSubProc );
+
 			// Initliaze our listview columns
 			LVCOLUMN lvc = { NULL }; 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
@@ -541,26 +553,30 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					case MENU_OPEN:
 					{
-						wchar_t *filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * MAX_PATH );
-						wmemset( filepath, 0, MAX_PATH );
+						pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+						pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * MAX_PATH * MAX_PATH );
+						wmemset( pi->filepath, 0, MAX_PATH * MAX_PATH );
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
 						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0";
-						ofn.lpstrFile = filepath;
-						ofn.nMaxFile = MAX_PATH;
+						ofn.lpstrFile = pi->filepath;
+						ofn.nMaxFile = MAX_PATH * MAX_PATH;
 						ofn.lpstrTitle = L"Open a Thumbcache Database file";
-						ofn.Flags = OFN_READONLY;
+						ofn.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_READONLY;
 						ofn.hwndOwner = hWnd;
 
 						// Display the Open File dialog box
 						if( GetOpenFileName( &ofn ) )
 						{
+							pi->offset = ofn.nFileOffset;
+
 							// filepath will be freed in the thread.
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )filepath, 0, NULL ) );
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
 						}
 						else
 						{
-							free( filepath );
+							free( pi->filepath );
+							free( pi );
 						}
 					}
 					break;
@@ -1498,6 +1514,83 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		break;
 	}
 	return TRUE;
+}
+
+LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+	switch( msg )
+	{
+		// This will essentially reconstruct the string that the open file dialog box creates when selecting multiple files.
+		case WM_DROPFILES:
+		{
+			int count = DragQueryFile( ( HDROP )wParam, -1, NULL, 0 );
+
+			pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+			pi->filepath = NULL;
+			pi->offset = 0;
+
+			int file_offset = 0;	// Keeps track of the last file in filepath.
+
+			// Go through the list of paths.
+			for ( int i = 0; i < count; i++ )
+			{
+				// Get the length of the file path.
+				int file_path_length = DragQueryFile( ( HDROP )wParam, i, NULL, 0 );
+
+				// Get the file path.
+				wchar_t *fpath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( file_path_length + 1 ) );
+				DragQueryFile( ( HDROP )wParam, i, fpath, file_path_length + 1 );
+
+				// Skip any folders that were dropped.
+				if ( ( GetFileAttributes( fpath ) & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
+				{
+					free( fpath );
+					continue;
+				}
+
+				// Copy the root directory into filepath.
+				if ( pi->filepath == NULL )
+				{
+					pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * count ) + 1 ) );
+					pi->offset = file_path_length;
+					// Find the last occurance of "\" in the string.
+					while ( pi->offset != 0 && fpath[ --pi->offset ] != L'\\' );
+
+					// Save the root directory name.
+					wcsncpy_s( pi->filepath, pi->offset + 1, fpath, pi->offset );
+
+					file_offset = ( ++pi->offset );
+				}
+
+				// Copy the file name. Each is separated by the NULL character.
+				wcscpy_s( pi->filepath + file_offset, file_path_length - pi->offset + 1, fpath + pi->offset );
+				file_offset += ( file_path_length - pi->offset + 1 );
+
+				free( fpath );
+			}
+
+			DragFinish( ( HDROP )wParam );
+
+			if ( pi->filepath != NULL )
+			{
+				// Terminate the last concatenated string.
+				wmemset( pi->filepath + file_offset, L'\0', 1 );
+
+				// filepath will be freed in the thread.
+				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
+			}
+			else	// No files were dropped.
+			{
+				free( pi );
+			}
+
+			return 0;
+		}
+		break;
+	}
+
+	// Everything that we don't handle gets passed back to the parent to process.
+	return CallWindowProc( ListViewProc, hWnd, msg, wParam, lParam );
 }
 
 LRESULT CALLBACK EditSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
