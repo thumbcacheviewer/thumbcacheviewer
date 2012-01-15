@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011 Eric Kutcher
+    Copyright (C) 2011-2012 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -152,19 +152,9 @@ unsigned __stdcall read_database( void *pArguments )
 				continue;
 			}
 
-			// Set the file pointer to the first available cache entry.
+			// Set the file pointer to the first possible cache entry. (Should be at an offset of 24 bytes)
 			// current_position will keep track our our file pointer position before setting the file pointer. (ReadFile sets it as well)
-			unsigned int current_position = SetFilePointer( hFile, dh.first_cache_entry, NULL, FILE_BEGIN );
-			if ( current_position == INVALID_SET_FILE_POINTER )
-			{
-				// The file pointer reached the EOF.
-				CloseHandle( hFile );
-				free( filepath );
-
-				MessageBox( g_hWnd_main, L"The first cache entry location is invalid.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
-
-				continue;
-			}
+			unsigned int current_position = 24;
 
 			entry_begin = 1;						// By default, we'll start with the first entry.
 			entry_end = dh.number_of_cache_entries;	// By default, we'll end with the last entry.
