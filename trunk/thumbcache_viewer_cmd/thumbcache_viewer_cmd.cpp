@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011 Eric Kutcher
+    Copyright (C) 2011-2012 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -203,15 +203,8 @@ int main( int argc, char *argv[] )
 		// Number of cache entries.
 		printf( "Number of cache entries: %lu\n", dh.number_of_cache_entries );
 
-		// Set the file pointer to the first available cache entry.
-		unsigned int current_position = SetFilePointer( hFile, dh.first_cache_entry, NULL, FILE_BEGIN );
-		if ( current_position == INVALID_SET_FILE_POINTER )
-		{
-			// The file pointer reached the EOF.
-			CloseHandle( hFile );
-			printf( "End of file reached. There are no more entries.\n" );
-			return 0;
-		}
+		// Set the file pointer to the first possible cache entry. (Should be at an offset of 24 bytes)
+		unsigned int current_position = 24;
 
 		// Go through our database and attempt to extract each cache entry.
 		for ( unsigned int i = 0; i < dh.number_of_cache_entries; i++ )
