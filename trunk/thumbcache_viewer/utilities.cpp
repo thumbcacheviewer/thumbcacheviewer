@@ -31,26 +31,12 @@ bool cancelled_prompt = false;	// User cancelled the prompt.
 unsigned int entry_begin = 0;	// Beginning position to start reading.
 unsigned int entry_end = 0;		// Ending position to stop reading.
 
-shared_info_linked_list *g_si = NULL;	// Our linked list of shared information.
+blank_entries_linked_list *g_be = NULL;	// A list to hold all of the blank entries.
 
 bool is_close( int a, int b )
 {
 	// See if the distance between two points is less than the snap width.
 	return abs( a - b ) < SNAP_WIDTH;
-}
-
-void cleanup()
-{
-	shared_info_linked_list *si = g_si;
-	shared_info_linked_list *del_si = NULL;
-	while ( si != NULL )
-	{
-		del_si = si;
-		si = si->next;
-		free( del_si );
-	}
-
-	g_si = NULL;
 }
 
 bool scan_memory( HANDLE hFile, unsigned int &offset )
@@ -134,9 +120,9 @@ unsigned __stdcall read_database( void *pArguments )
 		HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 		if ( hFile != INVALID_HANDLE_VALUE )
 		{
-			shared_info_linked_list *si = NULL;
+			shared_info *si = NULL;
 			DWORD read = 0;
-			unsigned int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
+			int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
 
 			database_header dh = { 0 };
 			ReadFile( hFile, &dh, sizeof( database_header ), &read, NULL );
@@ -501,10 +487,7 @@ unsigned __stdcall read_database( void *pArguments )
 				if ( si == NULL )
 				{
 					// This information is shared between entries within the database.
-					si = ( shared_info_linked_list * )malloc( sizeof( shared_info_linked_list ) );
-					si->next = g_si;
-					g_si = si;
-					
+					si = ( shared_info * )malloc( sizeof( shared_info ) );
 					si->count = 0;
 					si->system = dh.version;
 					wcscpy_s( si->dbpath, MAX_PATH, filepath );
@@ -516,18 +499,30 @@ unsigned __stdcall read_database( void *pArguments )
 				// The operating system and database location is shared among each entry for the database. This will reduce the amount of memory used.
 				fi->si = si;
 
-				// Insert a row into our listview.
-				LVITEM lvi = { NULL };
-				lvi.mask = LVIF_PARAM; // Our listview items will display the text contained the lParam value.
-				lvi.iItem = item_count++;
-				lvi.iSubItem = 0;
-				lvi.lParam = ( LPARAM )fi;
-				SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
+				// Add blank entries to our blank entries linked list.
+				if ( hide_blank_entries == true && fi->size == 0 )
+				{
+					blank_entries_linked_list *be = ( blank_entries_linked_list * )malloc( sizeof( blank_entries_linked_list ) );
+					be->fi = fi;
+					be->next = g_be;
 
-				// Enable the Save All and Select All menu items.
-				EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
-				EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_ENABLED );
-				EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_ENABLED );
+					g_be = be;
+				}
+				else
+				{
+					// Insert a row into our listview.
+					LVITEM lvi = { NULL };
+					lvi.mask = LVIF_PARAM; // Our listview items will display the text contained the lParam value.
+					lvi.iItem = item_count++;
+					lvi.iSubItem = 0;
+					lvi.lParam = ( LPARAM )fi;
+					SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
+
+					// Enable the Save All and Select All menu items.
+					EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
+					EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_ENABLED );
+					EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_ENABLED );
+				}
 
 				// Free our database cache entry.
 				free( database_cache_entry );

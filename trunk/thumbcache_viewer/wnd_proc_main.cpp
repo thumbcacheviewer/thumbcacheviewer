@@ -60,6 +60,8 @@ RECT last_dim = { 0 };				// Keeps track of the image window's dimension before 
 fileinfo *current_fileinfo = NULL;	// Holds information about the currently selected image. Gets deleted in WM_DESTROY.
 Gdiplus::Image *gdi_image = NULL;	// GDI+ image object. We need it to handle .png and .jpg images.
 
+bool hide_blank_entries = false;	// Toggled from the main menu. Hides the blank (0 byte) entries
+
 int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
 	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
@@ -210,6 +212,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			g_hMenu = CreateMenu();
 			HMENU hMenuSub_file = CreatePopupMenu();
 			HMENU hMenuSub_edit = CreatePopupMenu();
+			HMENU hMenuSub_view = CreatePopupMenu();
 			HMENU hMenuSub_help = CreatePopupMenu();
 			g_hMenuSub_context = CreatePopupMenu();
 
@@ -264,11 +267,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			mii.wID = MENU_SELECT_ALL;
 			InsertMenuItem( hMenuSub_edit, 2, TRUE, &mii );
 
+			// VIEW MENU
+			mii.fType = MFT_STRING;
+			mii.dwTypeData = L"Hide Blank Entries\tCtrl+H";
+			mii.cch = 25;
+			mii.wID = MENU_HIDE_BLANK;
+			mii.fState = MFS_ENABLED;
+			InsertMenuItem( hMenuSub_view, 0, TRUE, &mii );
+
 			// HELP MENU
 			mii.dwTypeData = L"&About";
 			mii.cch = 6;
 			mii.wID = MENU_ABOUT;
-			mii.fState = MFS_ENABLED;
 			InsertMenuItem( hMenuSub_help, 0, TRUE, &mii );
 
 			// MENU BAR
@@ -283,10 +293,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			mii.hSubMenu = hMenuSub_edit;
 			InsertMenuItem( g_hMenu, 1, TRUE, &mii );
 
+			mii.dwTypeData = L"&View";
+			mii.cch = 5;
+			mii.hSubMenu = hMenuSub_view;
+			InsertMenuItem( g_hMenu, 2, TRUE, &mii );
+
 			mii.dwTypeData = L"&Help";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_help;
-			InsertMenuItem( g_hMenu, 2, TRUE, &mii );
+			InsertMenuItem( g_hMenu, 3, TRUE, &mii );
 
 			// Set our menu bar.
 			SetMenu( hWnd, g_hMenu );
@@ -616,6 +631,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								num_items = SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
 							}
 
+							SetWindowText( hWnd, L"Thumbcache Viewer - Please wait..." );
+
 							// Retrieve the lParam value from the selected listview item.
 							LVITEM lvi = { NULL };
 							lvi.mask = LVIF_PARAM;
@@ -672,7 +689,83 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								// Free our buffer.
 								free( save_image );
 							}
+
+							SetWindowText( hWnd, PROGRAM_CAPTION );
 						}
+					}
+					break;
+
+					case MENU_HIDE_BLANK:
+					{
+						hide_blank_entries = !hide_blank_entries;
+
+						// Put a check next to the menu item if we choose to hide blank entries. Remove it if we don't.
+						CheckMenuItem( g_hMenu, MENU_HIDE_BLANK, ( hide_blank_entries ? MF_CHECKED : MF_UNCHECKED ) );
+
+						SetWindowText( hWnd, L"Thumbcache Viewer - Please wait..." );
+
+						LVITEM lvi = { NULL };
+						lvi.mask = LVIF_PARAM;
+
+						int num_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+						if ( hide_blank_entries == false )	// Display the blank entries.
+						{
+							// This will reinsert the blank entry at the end of the listview.
+							blank_entries_linked_list *be = g_be;
+							blank_entries_linked_list *del_be = NULL;
+							g_be = NULL;
+							while ( be != NULL )
+							{
+								del_be = be;
+
+								// Insert a row into our listview.
+								lvi.iItem = num_items++;
+								lvi.iSubItem = 0;
+								lvi.lParam = ( LPARAM )be->fi;
+								SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
+
+								be = be->next;
+								free( del_be );	// Remove the entry from the linked list. We do this for easy managment in case the user decides to remove an item from the listview.
+							}
+
+							// Enable the Save All and Select All menu items.
+							EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
+							EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_ENABLED );
+							EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_ENABLED );
+						}
+						else	// Hide the blank entries.
+						{
+							// Scroll to the first item.
+							// This will reduce the time it takes to remove a large selection of items.
+							// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
+							SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, 0, FALSE );
+
+							// Start from the end and work our way to the beginning.
+							for ( int i = num_items - 1; i >= 0; --i )
+							{
+								lvi.iItem = i;
+								SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+								// If the list item is blank, then add it to the blank entry linked list.
+								if ( ( ( fileinfo * )lvi.lParam )->size == 0 )
+								{
+									blank_entries_linked_list *be = ( blank_entries_linked_list * )malloc( sizeof( blank_entries_linked_list ) );
+									be->fi = ( fileinfo * )lvi.lParam;
+									be->next = g_be;
+
+									g_be = be;
+
+									// Remove the list item.
+									SendMessage( g_hWnd_list, LVM_DELETEITEM, i, 0 );
+								}
+							}
+						}
+
+						SetWindowText( hWnd, PROGRAM_CAPTION );
+
+						// Refresh the listview. (Updates the item count column)
+						InvalidateRect( g_hWnd_list, NULL, TRUE );
 					}
 					break;
 
@@ -693,44 +786,51 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						is_attached = false;
 						skip_main = false;
 
+						SetWindowText( hWnd, L"Thumbcache Viewer - Please wait..." );
+
+						LVITEMA lvi = { NULL };
+						lvi.mask = LVIF_PARAM;
+
 						// See if we've selected all the items. We can clear the list much faster this way.
 						int num_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
-						if ( num_items == SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) )
+						int sel_count = SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
+						if ( num_items == sel_count )
 						{
 							// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
 							for ( int i = 0; i < num_items; ++i )
 							{
-								LVITEMA lvi = { NULL };
-								lvi.mask = LVIF_PARAM;
+								// We first need to get the lParam value otherwise the memory won't be freed.
 								lvi.iItem = i;
 								SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-								// First free the filename pointer.
+								( ( fileinfo * )lvi.lParam )->si->count--;
+
+								// Remove our shared information from the linked list if there's no more items for this database.
+								if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+								{
+									free( ( ( fileinfo * )lvi.lParam )->si );
+								}
+
+								// Free our filename, then fileinfo structure.
 								free( ( ( fileinfo * )lvi.lParam )->filename );
-								// Then free the fileinfo structure.
 								free( ( fileinfo * )lvi.lParam );
 							}
-
-							// Free our linked list of shared info.
-							cleanup();
 
 							SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
 						}
 						else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
 						{
+							// Scroll to the first selected item.
+							// This will reduce the time it takes to remove a large selection of items.
+							// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
+							SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_SELECTED ), FALSE );
+
 							for ( int i = num_items - 1; i >= 0; --i )
 							{
-								// Scroll to the first selected item.
-								// This will reduce the time it takes to remove a large selection of items.
-								// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
-								SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_SELECTED ), FALSE );
-
 								// See if the item is selected.
 								if ( SendMessage( g_hWnd_list, LVM_GETITEMSTATE, i, LVIS_SELECTED ) == LVIS_SELECTED )
 								{
 									// We first need to get the lParam value otherwise the memory won't be freed.
-									LVITEMA lvi = { NULL };
-									lvi.mask = LVIF_PARAM;
 									lvi.iItem = i;
 									SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
@@ -739,29 +839,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 									// Remove our shared information from the linked list if there's no more items for this database.
 									if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
 									{
-										shared_info_linked_list *si = g_si;
-										shared_info_linked_list *last_si = NULL;
-										while ( si != NULL )
-										{
-											// Two pointers are guaranteed to be equal if they are of the same type and point to the same object.
-											if ( si->dbpath == ( ( fileinfo * )lvi.lParam )->si->dbpath )
-											{
-												if ( last_si != NULL ) // The info is somewhere in the middle of the linked list.
-												{
-													last_si->next = si->next;
-												}
-												else	// The info is at the beginning.
-												{
-													g_si = si->next;
-												}
-
-												free( si );
-
-												break;
-											}
-											last_si = si;
-											si = si->next;
-										}
+										free( ( ( fileinfo * )lvi.lParam )->si );
 									}
 									
 									// Free our filename, then fileinfo structure.
@@ -770,9 +848,17 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 									// Remove the list item.
 									SendMessage( g_hWnd_list, LVM_DELETEITEM, i, 0 );
+
+									--sel_count;
+									if ( sel_count == 0 )
+									{
+										break;
+									}
 								}
 							}
 						}
+
+						SetWindowText( hWnd, PROGRAM_CAPTION );
 
 						// Refresh the listview. (Updates the item count column)
 						InvalidateRect( g_hWnd_list, NULL, TRUE );
@@ -838,6 +924,12 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							case 'O':	// Open the file dialog box if Ctrl + O is down.
 							{
 								SendMessage( hWnd, WM_COMMAND, MENU_OPEN, 0 );
+							}
+							break;
+
+							case 'H':	// Hide blank entries if Ctrl + H is down.
+							{
+								SendMessage( hWnd, WM_COMMAND, MENU_HIDE_BLANK, 0 );
 							}
 							break;
 
@@ -1486,6 +1578,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.iItem = i;
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
+					( ( fileinfo * )lvi.lParam )->si->count--;
+
+					// Remove our shared information from the linked list if there's no more items for this database.
+					if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+					{
+						free( ( ( fileinfo * )lvi.lParam )->si );
+					}
+
 					// First free the filename pointer.
 					free( ( ( fileinfo * )lvi.lParam )->filename );
 					// Then free the fileinfo structure.
@@ -1499,8 +1599,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				delete gdi_image;
 			}
 
-			// Free our linked list of shared info.
-			cleanup();
+			// Go through the list of blank entries and free any shared info and fileinfo structures.
+			blank_entries_linked_list *be = g_be;
+			blank_entries_linked_list *del_be = NULL;
+			while ( be != NULL )
+			{
+				del_be = be;
+				be = be->next;
+
+				del_be->fi->si->count--;
+
+				if ( del_be->fi->si->count == 0 )
+				{
+					free( del_be->fi->si );
+				}
+				free( del_be->fi->filename );
+				free( del_be->fi );
+				free( del_be );
+			}
 
 			PostQuitMessage( 0 );
 			return 0;
