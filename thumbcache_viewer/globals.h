@@ -51,6 +51,7 @@
 #define MENU_ABOUT		1005
 #define MENU_SELECT_ALL	1006
 #define MENU_REMOVE_SEL	1007
+#define MENU_HIDE_BLANK	1008
 
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
@@ -100,13 +101,12 @@ struct database_cache_entry_vista
 };
 
 // Holds shared variables among database entries.
-struct shared_info_linked_list
+struct shared_info
 {
 	wchar_t dbpath[ MAX_PATH ];			// Path to the database file.
 	unsigned int system;				// 0x14 = Windows Vista, 0x15 = Windows 7
 
 	unsigned long count;				// Number of directory entries.
-	shared_info_linked_list *next;
 };
 
 // This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
@@ -120,12 +120,20 @@ struct fileinfo
 	long long data_checksum;			// Data checksum
 	long long header_checksum;			// Header checksum
 
-	shared_info_linked_list *si;
+	shared_info *si;					// Shared information between items in a database.
 };
 
+// Temporary list for blank entries.
+struct blank_entries_linked_list
+{
+	fileinfo *fi;						// Refer to the file info so we can add it to the listview.
+	blank_entries_linked_list *next;
+};
+
+// Multi-file open structure.
 struct pathinfo
 {
-	wchar_t *filepath;			// Path the file/folder
+	wchar_t *filepath;			// Path to the file/folder
 	unsigned short offset;		// Offset to the first file.
 };
 
@@ -139,7 +147,6 @@ LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 bool is_close( int a, int b );
 unsigned __stdcall read_database( void *pArguments );
-void cleanup();
 
 // These are all variables that are shared among the separate .cpp files.
 
@@ -179,6 +186,7 @@ extern POINT old_pos;				// The old position of gdi_image. Used to calculate the
 
 extern float scale;					// Scale of the image.
 
-extern shared_info_linked_list *g_si;	// Linked list containing shared information for each database.
+extern blank_entries_linked_list *g_be;	// A list to hold all of the blank entries.
+extern bool hide_blank_entries;		// Hide blank entries.
 
 #endif
