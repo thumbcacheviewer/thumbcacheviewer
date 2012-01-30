@@ -35,18 +35,18 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 {
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 	ULONG_PTR gdiplusToken;
-   
+
 	// Initialize GDI+.
 	Gdiplus::GdiplusStartup( &gdiplusToken, &gdiplusStartupInput, NULL );
 
-	// Blocks our reading thread.
-	InitializeCriticalSection( &open_cs );
+	// Blocks our reading thread and various GUI operations.
+	InitializeCriticalSection( &pe_cs );
 
 	// Get the default message system font.
 	NONCLIENTMETRICS ncm = { NULL };
 	ncm.cbSize = sizeof( NONCLIENTMETRICS );
 	SystemParametersInfoW( SPI_GETNONCLIENTMETRICS, sizeof( NONCLIENTMETRICS ), &ncm, 0 );
-	
+
 	// Set our global font to the LOGFONT value obtained from the system.
 	hFont = CreateFontIndirect( &ncm.lfMessageFont );
 
@@ -133,7 +133,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	}
 
 	// Delete our critical section.
-	DeleteCriticalSection( &open_cs );
+	DeleteCriticalSection( &pe_cs );
 
 	// Shutdown GDI+
 	Gdiplus::GdiplusShutdown( gdiplusToken );
