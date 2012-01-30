@@ -56,9 +56,13 @@
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
 
-#define MAX_ENTRIES		4096	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
+#define MAX_ENTRIES		10240	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
 
-#define WM_PROPAGATE	WM_APP	// Updates the prompt window.
+#define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
+
+#define WM_PROPAGATE		WM_APP		// Updates the prompt window.
+#define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
+#define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
 
 // Thumbcache header information.
 struct database_header
@@ -137,6 +141,13 @@ struct pathinfo
 	unsigned short offset;		// Offset to the first file.
 };
 
+// Save To structure.
+struct save_param
+{
+	LPITEMIDLIST lpiidl;	// BrowseForFolder variable when saving files.
+	bool save_all;			// Save All = true, Save Selected = false.
+};
+
 // Function prototypes
 LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
@@ -145,8 +156,13 @@ VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
 
 LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
-bool is_close( int a, int b );
+unsigned __stdcall cleanup( void *pArguments );
 unsigned __stdcall read_database( void *pArguments );
+unsigned __stdcall remove_items( void *pArguments );
+unsigned __stdcall show_hide_items( void *pArguments );
+unsigned __stdcall save_items( void *pArguments );
+bool is_close( int a, int b );
+void update_menus( bool disable_all );
 
 // These are all variables that are shared among the separate .cpp files.
 
@@ -156,7 +172,7 @@ extern HWND g_hWnd_image;			// Handle to our image window.
 extern HWND g_hWnd_prompt;			// Handle to our prompt window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
 
-extern CRITICAL_SECTION open_cs;	// Allow only one read_database thread to be active.
+extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
 extern HANDLE prompt_mutex;			// Blocks read_database() until the g_hWnd_prompt is destroyed.
 
 extern HFONT hFont;					// Handle to the system's message font.
@@ -188,5 +204,11 @@ extern float scale;					// Scale of the image.
 
 extern blank_entries_linked_list *g_be;	// A list to hold all of the blank entries.
 extern bool hide_blank_entries;		// Hide blank entries.
+
+// Thread variables
+extern bool kill_thread;			// Allow for a clean shutdown.
+
+extern bool in_thread;				// Flag to indicate that we're in a worker thread.
+extern bool skip_draw;				// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
 
 #endif

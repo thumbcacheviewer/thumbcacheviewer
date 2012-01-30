@@ -22,22 +22,20 @@
 #define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
 #define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 
-#define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
-
-CRITICAL_SECTION open_cs;
 HANDLE prompt_mutex = NULL;
 
 bool cancelled_prompt = false;	// User cancelled the prompt.
 unsigned int entry_begin = 0;	// Beginning position to start reading.
 unsigned int entry_end = 0;		// Ending position to stop reading.
 
-blank_entries_linked_list *g_be = NULL;	// A list to hold all of the blank entries.
+HANDLE shutdown_mutex = NULL;	// Blocks shutdown while a worker thread is active.
+bool kill_thread = false;		// Allow for a clean shutdown.
 
-bool is_close( int a, int b )
-{
-	// See if the distance between two points is less than the snap width.
-	return abs( a - b ) < SNAP_WIDTH;
-}
+CRITICAL_SECTION pe_cs;			// Queues additional worker threads.
+bool in_thread = false;			// Flag to indicate that we're in a worker thread.
+bool skip_draw = false;			// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
+
+blank_entries_linked_list *g_be = NULL;	// A list to hold all of the blank entries.
 
 bool scan_memory( HANDLE hFile, unsigned int &offset )
 {
@@ -79,11 +77,360 @@ bool scan_memory( HANDLE hFile, unsigned int &offset )
 	return true;
 }
 
+// This will allow our main thread to continue while secondary threads finish their processing.
+unsigned __stdcall cleanup( void *pArguments )
+{
+	// This mutex will be released when the thread gets killed.
+	shutdown_mutex = CreateSemaphore( NULL, 0, 1, NULL );
+
+	kill_thread = true;	// Causes our secondary threads to cease processing and release the mutex.
+
+	// Wait for any active threads to complete. 5 second timeout in case we miss the release.
+	WaitForSingleObject( shutdown_mutex, 5000 );
+	CloseHandle( shutdown_mutex );
+	shutdown_mutex = NULL;
+
+	// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
+	SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
+unsigned __stdcall remove_items( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+	
+	skip_draw = true;	// Prevent the listview from drawing while freeing lParam values.
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
+
+	LVITEM lvi = { NULL };
+	lvi.mask = LVIF_PARAM;
+
+	int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+	int sel_count = SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
+
+	// See if we've selected all the items. We can clear the list much faster this way.
+	if ( item_count == sel_count )
+	{
+		// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
+		for ( int i = 0; i < item_count; ++i )
+		{
+			// Stop processing and exit the thread.
+			if ( kill_thread == true )
+			{
+				break;
+			}
+
+			// We first need to get the lParam value otherwise the memory won't be freed.
+			lvi.iItem = i;
+			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			( ( fileinfo * )lvi.lParam )->si->count--;
+
+			// Remove our shared information from the linked list if there's no more items for this database.
+			if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+			{
+				free( ( ( fileinfo * )lvi.lParam )->si );
+			}
+
+			// Free our filename, then fileinfo structure.
+			free( ( ( fileinfo * )lvi.lParam )->filename );
+			free( ( fileinfo * )lvi.lParam );
+		}
+
+		SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
+	}
+	else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
+	{
+		// Scroll to the first item.
+		// This will reduce the time it takes to remove a large selection of items.
+		// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
+		SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, 0, FALSE );
+
+		int *index_array = ( int * )malloc( sizeof( int ) * sel_count );
+
+		lvi.iItem = -1;	// Set this to -1 so that the LVM_GETNEXTITEM call can go through the list correctly.
+
+		// Create an index list of selected items (in reverse order).
+		for ( int i = 0; i < sel_count; i++ )
+		{
+			lvi.iItem = index_array[ sel_count - 1 - i ] = SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED );
+		}
+
+		for ( int i = 0; i < sel_count; i++ )
+		{
+			// Stop processing and exit the thread.
+			if ( kill_thread == true )
+			{
+				break;
+			}
+
+			// We first need to get the lParam value otherwise the memory won't be freed.
+			lvi.iItem = index_array[ i ];
+			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			( ( fileinfo * )lvi.lParam )->si->count--;
+
+			// Remove our shared information from the linked list if there's no more items for this database.
+			if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+			{
+				free( ( ( fileinfo * )lvi.lParam )->si );
+			}
+			
+			// Free our filename, then fileinfo structure.
+			free( ( ( fileinfo * )lvi.lParam )->filename );
+			free( ( fileinfo * )lvi.lParam );
+
+			// Remove the list item.
+			SendMessage( g_hWnd_list, LVM_DELETEITEM, index_array[ i ], 0 );
+		}
+
+		free( index_array );
+	}
+
+	skip_draw = false;	// Allow drawing again.
+
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive. Also forces a refresh to update the item count column.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys.
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
+unsigned __stdcall show_hide_items( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
+
+	LVITEM lvi = { NULL };
+	lvi.mask = LVIF_PARAM;
+
+	int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+	if ( hide_blank_entries == false )	// Display the blank entries.
+	{
+		// This will reinsert the blank entry at the end of the listview.
+		blank_entries_linked_list *be = g_be;
+		blank_entries_linked_list *del_be = NULL;
+		g_be = NULL;
+		while ( be != NULL )
+		{
+			// Stop processing and exit the thread.
+			if ( kill_thread == true )
+			{
+				g_be = be;	// Reset the global blank entries list to free in WM_DESTORY.
+
+				break;
+			}
+			del_be = be;
+
+			// Insert a row into our listview.
+			lvi.iItem = item_count++;
+			lvi.iSubItem = 0;
+			lvi.lParam = ( LPARAM )be->fi;
+			SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
+
+			be = be->next;
+			free( del_be );	// Remove the entry from the linked list. We do this for easy managment in case the user decides to remove an item from the listview.
+		}
+	}
+	else	// Hide the blank entries.
+	{
+		// Scroll to the first item.
+		// This will reduce the time it takes to remove a large selection of items.
+		// When we delete the item from the end of the listview, the control won't force a paint refresh (since the item's not likely to be visible)
+		SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, 0, FALSE );
+
+		// Start from the end and work our way to the beginning.
+		for ( int i = item_count - 1; i >= 0; --i )
+		{
+			// Stop processing and exit the thread.
+			if ( kill_thread == true )
+			{
+				break;
+			}
+
+			lvi.iItem = i;
+			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			// If the list item is blank, then add it to the blank entry linked list.
+			if ( ( ( fileinfo * )lvi.lParam )->size == 0 )
+			{
+				blank_entries_linked_list *be = ( blank_entries_linked_list * )malloc( sizeof( blank_entries_linked_list ) );
+				be->fi = ( fileinfo * )lvi.lParam;
+				be->next = g_be;
+
+				g_be = be;
+
+				// Remove the list item.
+				SendMessage( g_hWnd_list, LVM_DELETEITEM, i, 0 );
+			}
+		}
+	}
+
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive. Also forces a refresh to update the item count column.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys. 
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
+unsigned __stdcall save_items( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
+
+	save_param *save_type = ( save_param * )pArguments;
+
+	wchar_t save_directory[ MAX_PATH ] = { 0 };
+	// Get the directory path from the id list.
+	SHGetPathFromIDList( save_type->lpiidl, save_directory );
+	CoTaskMemFree( save_type->lpiidl );
+	
+	// Depending on what was selected, get the number of items we'll be saving.
+	int save_items = ( save_type->save_all == true ? SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) : SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) );
+
+	// Retrieve the lParam value from the selected listview item.
+	LVITEM lvi = { NULL };
+	lvi.mask = LVIF_PARAM;
+	lvi.iItem = -1;	// Set this to -1 so that the LVM_GETNEXTITEM call can go through the list correctly.
+
+	// Go through all the items we'll be saving.
+	for ( int i = 0; i < save_items; ++i )
+	{
+		// Stop processing and exit the thread.
+		if ( kill_thread == true )
+		{
+			break;
+		}
+
+		lvi.iItem = ( save_type->save_all == true ? i : SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED ) );
+		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+		// Create a buffer to read in our new bitmap.
+		char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
+
+		// Attempt to open a file for reading.
+		HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+		if ( hFile != INVALID_HANDLE_VALUE )
+		{
+			DWORD read = 0;
+			// Set our file pointer to the beginning of the database file.
+			SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->offset, 0, FILE_BEGIN );
+			// Read the entire image into memory.
+			ReadFile( hFile, save_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
+			CloseHandle( hFile );
+
+			// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
+			wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
+			swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
+
+			// Attempt to open a file for saving.
+			HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+			if ( hFile_save != INVALID_HANDLE_VALUE )
+			{
+				// Write the buffer to our file. Only write what we've read.
+				DWORD dwBytesWritten = 0;
+				WriteFile( hFile_save, save_image, read, &dwBytesWritten, NULL );
+
+				CloseHandle( hFile_save );
+			}
+
+			// See if the path was too long.
+			if ( GetLastError() == ERROR_PATH_NOT_FOUND )
+			{
+				MessageBox( g_hWnd_main, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+			}
+		}
+		// Free our buffer.
+		free( save_image );
+	}
+
+	free( save_type );
+
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys. 
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
 unsigned __stdcall read_database( void *pArguments )
 {
 	// This will block every other thread from entering until the first thread is complete.
 	// Protects our global variables.
-	EnterCriticalSection( &open_cs );
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
 
 	pathinfo *pi = ( pathinfo * )pArguments;
 
@@ -99,6 +446,12 @@ unsigned __stdcall read_database( void *pArguments )
 	// We're going to open each file in the path info.
 	do
 	{
+		// Stop processing and exit the thread.
+		if ( kill_thread == true )
+		{
+			break;
+		}
+
 		// Construct the filepath for each file.
 		if ( construct_filepath == true )
 		{
@@ -183,6 +536,15 @@ unsigned __stdcall read_database( void *pArguments )
 			// Go through our database and attempt to extract each cache entry.
 			for ( unsigned int i = 1; i <= entry_end; ++i )
 			{
+				// Stop processing and exit the thread.
+				if ( kill_thread == true )
+				{
+					free( filepath );
+
+					next_file = true;
+					break;
+				}
+
 				// Set the file pointer to the end of the last cache entry.
 				current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 				if ( current_position == INVALID_SET_FILE_POINTER )
@@ -517,11 +879,6 @@ unsigned __stdcall read_database( void *pArguments )
 					lvi.iSubItem = 0;
 					lvi.lParam = ( LPARAM )fi;
 					SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
-
-					// Enable the Save All and Select All menu items.
-					EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
-					EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_ENABLED );
-					EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_ENABLED );
 				}
 
 				// Free our database cache entry.
@@ -550,8 +907,22 @@ unsigned __stdcall read_database( void *pArguments )
 	free( pi->filepath );
 	free( pi );
 
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys. 
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
 	// We're done. Let other threads continue.
-	LeaveCriticalSection( &open_cs );
+	LeaveCriticalSection( &pe_cs );
 
 	_endthreadex( 0 );
 	return 0;
