@@ -134,7 +134,7 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
 	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
 	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
-	char checksum1[ 19 ], checksum2[ 19 ];
+	char checksum1[ 17 ], checksum2[ 17 ];
 
 	// We added NUM_COLUMNS to the lParamSort value in order to distinguish between items we want to sort up, and items we want to sort down.
 	// Saves us from having to pass some arbitrary struct pointer.
@@ -162,24 +162,24 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 4:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->data_checksum );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->data_checksum );
+				sprintf_s( checksum1, 17, "%016llx", fi1->data_checksum );
+				sprintf_s( checksum2, 17, "%016llx", fi2->data_checksum );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->header_checksum );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->header_checksum );
+				sprintf_s( checksum1, 17, "%016llx", fi1->header_checksum );
+				sprintf_s( checksum2, 17, "%016llx", fi2->header_checksum );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->entry_hash );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->entry_hash );
+				sprintf_s( checksum1, 17, "%016llx", fi1->entry_hash );
+				sprintf_s( checksum2, 17, "%016llx", fi2->entry_hash );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
@@ -227,24 +227,24 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 4:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->data_checksum );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->data_checksum );
+				sprintf_s( checksum1, 17, "%016llx", fi1->data_checksum );
+				sprintf_s( checksum2, 17, "%016llx", fi2->data_checksum );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->header_checksum );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->header_checksum );
+				sprintf_s( checksum1, 17, "%016llx", fi1->header_checksum );
+				sprintf_s( checksum2, 17, "%016llx", fi2->header_checksum );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 19, "0x%016llx", fi1->entry_hash );
-				sprintf_s( checksum2, 19, "0x%016llx", fi2->entry_hash );
+				sprintf_s( checksum1, 17, "%016llx", fi1->entry_hash );
+				sprintf_s( checksum2, 17, "%016llx", fi2->entry_hash );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
