@@ -752,33 +752,9 @@ unsigned __stdcall read_database( void *pArguments )
 				fi->offset = file_position;
 				fi->size = data_size;
 
-				long long entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
-				long long data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
-				long long header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
-
-				// Reverse the little endian values for data_checksum and header_checksum.
-
-				// Swaps the 32bit ints of the 64bit int.
-				_asm mov eax, dword ptr entry_hash;
-				_asm mov ecx, dword ptr entry_hash + 4;
-				_asm mov dword ptr entry_hash, ecx;
-				_asm mov dword ptr entry_hash + 4, eax;
-
-				// Swaps the 32bit ints of the 64bit int.
-				_asm mov eax, dword ptr data_checksum;
-				_asm mov ecx, dword ptr data_checksum + 4;
-				_asm mov dword ptr data_checksum, ecx;
-				_asm mov dword ptr data_checksum + 4, eax;
-
-				// Swaps the 32bit ints of the 64bit int.
-				_asm mov eax, dword ptr header_checksum;
-				_asm mov ecx, dword ptr header_checksum + 4;
-				_asm mov dword ptr header_checksum, ecx;
-				_asm mov dword ptr header_checksum + 4, eax;
-
-				fi->data_checksum = data_checksum;
-				fi->header_checksum = header_checksum;
-				fi->entry_hash = entry_hash;
+				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
+				fi->data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
+				fi->header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
 
 				// Read any data that exists and get its file extension.
 				if ( data_size != 0 )

@@ -134,7 +134,7 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
 	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
 	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
-	char checksum1[ 17 ], checksum2[ 17 ];
+	char checksum1[ 19 ], checksum2[ 19 ];
 
 	// We added NUM_COLUMNS to the lParamSort value in order to distinguish between items we want to sort up, and items we want to sort down.
 	// Saves us from having to pass some arbitrary struct pointer.
@@ -162,24 +162,24 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 4:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->data_checksum, fi1->data_checksum + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->data_checksum, fi2->data_checksum + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->data_checksum );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->data_checksum );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->header_checksum, fi1->header_checksum + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->header_checksum, fi2->header_checksum + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->header_checksum );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->header_checksum );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->entry_hash, fi1->entry_hash + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->entry_hash, fi2->entry_hash + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->entry_hash );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->entry_hash );
 				return strcmp( checksum1, checksum2 );
 			}
 			break;
@@ -227,24 +227,24 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 4:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->data_checksum, fi1->data_checksum + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->data_checksum, fi2->data_checksum + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->data_checksum );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->data_checksum );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->header_checksum, fi1->header_checksum + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->header_checksum, fi2->header_checksum + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->header_checksum );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->header_checksum );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 17, "%08x%08x", fi1->entry_hash, fi1->entry_hash + 4 );
-				sprintf_s( checksum2, 17, "%08x%08x", fi2->entry_hash, fi2->entry_hash + 4 );
+				sprintf_s( checksum1, 19, "0x%016llx", fi1->entry_hash );
+				sprintf_s( checksum2, 19, "0x%016llx", fi2->entry_hash );
 				return strcmp( checksum2, checksum1 );
 			}
 			break;
@@ -1264,11 +1264,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_dc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->data_checksum, ( ( fileinfo * )lvi.lParam )->data_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
 							}
 						}
 						break;
@@ -1278,11 +1278,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_hc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->header_checksum, ( ( fileinfo * )lvi.lParam )->header_checksum + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
 							}
 						}
 						break;
@@ -1292,11 +1292,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_eh_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08x%08x", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->entry_hash );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%08X%08X", ( ( fileinfo * )lvi.lParam )->entry_hash, ( ( fileinfo * )lvi.lParam )->entry_hash + 4 );
+								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->entry_hash );
 							}
 						}
 						break;
