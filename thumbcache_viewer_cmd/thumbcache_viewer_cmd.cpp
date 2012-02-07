@@ -329,17 +329,9 @@ int main( int argc, char *argv[] )
 
 			printf( "Cache size: %lu bytes\n", cache_entry_size );
 
-			long long entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
-
-			// Swaps the 32bit ints of the 64bit int.
-			_asm mov eax, dword ptr entry_hash;
-			_asm mov ecx, dword ptr entry_hash + 4;
-			_asm mov dword ptr entry_hash, ecx;
-			_asm mov dword ptr entry_hash + 4, eax;
-
 			// The entry hash may be the same as the filename.
 			wchar_t s_entry_hash[ 19 ] = { 0 };
-			swprintf_s( s_entry_hash, 19, L"0x%08x%08x", entry_hash, entry_hash + 4 );	// This will probably be the same as the file name.
+			swprintf_s( s_entry_hash, 19, L"0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );	// This will probably be the same as the file name.
 			wprintf_s( L"Entry hash: %s\n", s_entry_hash );
 
 			// Windows Vista
@@ -363,30 +355,14 @@ int main( int argc, char *argv[] )
 			unsigned int unknown = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->unknown : ( ( database_cache_entry_vista * )database_cache_entry )->unknown );
 			printf( "Unknown value: 0x%04x\n", unknown );
 
-			long long data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
-			
-			// Swaps the 32bit ints of the 64bit int.
-			_asm mov eax, dword ptr data_checksum;
-			_asm mov ecx, dword ptr data_checksum + 4;
-			_asm mov dword ptr data_checksum, ecx;
-			_asm mov dword ptr data_checksum + 4, eax;
-
 			// CRC-64 data checksum.
 			wchar_t s_data_checksum[ 19 ] = { 0 };
-			swprintf_s( s_data_checksum, 19, L"0x%08x%08x", data_checksum, data_checksum + 4 );
+			swprintf_s( s_data_checksum, 19, L"0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ));
 			wprintf_s( L"Data checksum (CRC-64): %s\n", s_data_checksum );
-
-			long long header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
-
-			// Swaps the 32bit ints of the 64bit int.
-			_asm mov eax, dword ptr header_checksum;
-			_asm mov ecx, dword ptr header_checksum + 4;
-			_asm mov dword ptr header_checksum, ecx;
-			_asm mov dword ptr header_checksum + 4, eax;
 
 			// CRC-64 header checksum.
 			wchar_t s_header_checksum[ 19 ] = { 0 };
-			swprintf_s( s_header_checksum, 19, L"0x%08x%08x", header_checksum, header_checksum + 4 );
+			swprintf_s( s_header_checksum, 19, L"0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
 			wprintf_s( L"Header checksum (CRC-64): %s\n", s_header_checksum );
 
 			// It's unlikely that a filename will be longer than MAX_PATH, but to be on the safe side, we should truncate it if it is.
