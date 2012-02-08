@@ -132,6 +132,9 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		DispatchMessage( &msg );
 	}
 
+	// Delete our font.
+	DeleteObject( hFont );
+
 	// Delete our critical section.
 	DeleteCriticalSection( &pe_cs );
 
