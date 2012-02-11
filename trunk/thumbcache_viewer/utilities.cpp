@@ -373,7 +373,7 @@ unsigned __stdcall save_items( void *pArguments )
 
 			// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
 			wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
-			swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
+			swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
 
 			// Attempt to open a file for saving.
 			HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -682,8 +682,8 @@ unsigned __stdcall read_database( void *pArguments )
 					continue;
 				}
 
-				// It's unlikely that a filename will be longer than MAX_PATH, but to be on the safe side, we should truncate it if it is.
-				unsigned short filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * MAX_PATH ) );
+				// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
+				unsigned int filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * SHRT_MAX ) );
 				
 				// UTF-16 filename. Allocate the filename length plus 6 for the unicode extension and null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
 				wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
