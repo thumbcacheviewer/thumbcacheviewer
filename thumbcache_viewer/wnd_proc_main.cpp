@@ -1039,7 +1039,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						// Set the image window's new title.
 						wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
-						swprintf_s( new_title, MAX_PATH + 30, L"%s - %dx%d", ( ( fileinfo * )lvi.lParam )->filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
+						swprintf_s( new_title, MAX_PATH + 30, L"%.259s - %dx%d", ( ( fileinfo * )lvi.lParam )->filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
 						SetWindowText( g_hWnd_image, new_title );
 
 						// See if our image window is minimized and set the rectangle to its old size if it is.
@@ -1146,7 +1146,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					// Set the image window's new title.
 					wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
-					swprintf_s( new_title, MAX_PATH + 30, L"%s - %dx%d", filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
+					swprintf_s( new_title, MAX_PATH + 30, L"%.259s - %dx%d", filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
 					SetWindowText( g_hWnd_image, new_title );
 
 					return TRUE;
@@ -1189,7 +1189,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				}
 
 				// Get the item's text.
-				wchar_t buf[ MAX_PATH + 5 ];
+				wchar_t tbuf[ MAX_PATH ];
+				wchar_t *buf = tbuf;
 				LVITEM lvi = { 0 };
 				lvi.mask = LVIF_PARAM;
 				lvi.iItem = dis->itemID;
@@ -1217,28 +1218,29 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						case 0:
 						{
-							swprintf_s( buf, MAX_PATH + 5, L"%d", dis->itemID + 1 );
+							swprintf_s( buf, MAX_PATH, L"%d", dis->itemID + 1 );
 						}
 						break;
 
 						case 1:
 						{
-							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->filename );
+							buf = ( ( fileinfo * )lvi.lParam )->filename;
 						}
 						break;
 
 						case 2:
 						{
+							buf = tbuf;	// Reset the buffer pointer.
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
 							if ( is_kbytes_size == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
+								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
+								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
 							}
 						}
 						break;
@@ -1250,11 +1252,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
 							if ( is_kbytes_offset == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"%d B", ( ( fileinfo * )lvi.lParam )->offset );
+								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->offset );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"%d KB", ( ( fileinfo * )lvi.lParam )->offset / 1024 );
+								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->offset / 1024 );
 							}
 						}
 						break;
@@ -1264,11 +1266,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_dc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
+								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
+								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
 							}
 						}
 						break;
@@ -1278,11 +1280,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_hc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
+								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
+								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
 							}
 						}
 						break;
@@ -1292,11 +1294,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_eh_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->entry_hash );
+								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->entry_hash );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH + 5, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->entry_hash );
+								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->entry_hash );
 							}
 						}
 						break;
@@ -1305,18 +1307,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 )
 							{
-								wcscpy_s( buf, MAX_PATH + 5, L"Windows 7" );
+								wcscpy_s( buf, MAX_PATH, L"Windows 7" );
 							}
 							else
 							{
-								wcscpy_s( buf, MAX_PATH + 5, L"Windows Vista" );
+								wcscpy_s( buf, MAX_PATH, L"Windows Vista" );
 							}
 						}
 						break;
 
 						case 8:
 						{
-							wcscpy_s( buf, MAX_PATH + 5, ( ( fileinfo * )lvi.lParam )->si->dbpath );
+							buf = ( ( fileinfo * )lvi.lParam )->si->dbpath;
 						}
 						break;
 					}
