@@ -670,7 +670,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						wmemset( pi->filepath, 0, MAX_PATH * MAX_PATH );
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
-						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0";
+						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0Iconcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0";
 						ofn.lpstrFile = pi->filepath;
 						ofn.nMaxFile = MAX_PATH * MAX_PATH;
 						ofn.lpstrTitle = L"Open a Thumbcache Database file";
@@ -1308,6 +1308,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 7" );
+							}
+							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 )
+							{
+								wcscpy_s( buf, MAX_PATH, L"Windows 8" );
 							}
 							else
 							{

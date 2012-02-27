@@ -55,6 +55,7 @@
 
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
+#define WINDOWS_8		0x1A
 
 #define MAX_ENTRIES		10240	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
 
@@ -69,7 +70,7 @@ struct database_header
 {
 	char magic_identifier[ 4 ];
 	unsigned int version;
-	unsigned int type;
+	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
 	unsigned int first_cache_entry;
 	unsigned int available_cache_entry;
 	unsigned int number_of_cache_entries;
@@ -84,6 +85,22 @@ struct database_cache_entry_7
 	unsigned int filename_length;
 	unsigned int padding_size;
 	unsigned int data_size;
+	unsigned int unknown;
+	long long data_checksum;
+	long long header_checksum;
+};
+
+// Window 8 Thumbcache entry.
+struct database_cache_entry_8
+{
+	char magic_identifier[ 4 ];
+	unsigned int cache_entry_size;
+	long long entry_hash;
+	unsigned int filename_length;
+	unsigned int padding_size;
+	unsigned int data_size;
+	unsigned int width;
+	unsigned int height;
 	unsigned int unknown;
 	long long data_checksum;
 	long long header_checksum;
