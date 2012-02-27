@@ -357,43 +357,47 @@ unsigned __stdcall save_items( void *pArguments )
 		lvi.iItem = ( save_type->save_all == true ? i : SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED ) );
 		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-		// Create a buffer to read in our new bitmap.
-		char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
-
-		// Attempt to open a file for reading.
-		HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-		if ( hFile != INVALID_HANDLE_VALUE )
+		// Skip 0 byte files.
+		if ( ( ( fileinfo * )lvi.lParam )->size != 0 )
 		{
-			DWORD read = 0;
-			// Set our file pointer to the beginning of the database file.
-			SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->offset, 0, FILE_BEGIN );
-			// Read the entire image into memory.
-			ReadFile( hFile, save_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
-			CloseHandle( hFile );
+			// Create a buffer to read in our new bitmap.
+			char *save_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
 
-			// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
-			wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
-			swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
-
-			// Attempt to open a file for saving.
-			HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
-			if ( hFile_save != INVALID_HANDLE_VALUE )
+			// Attempt to open a file for reading.
+			HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+			if ( hFile != INVALID_HANDLE_VALUE )
 			{
-				// Write the buffer to our file. Only write what we've read.
-				DWORD dwBytesWritten = 0;
-				WriteFile( hFile_save, save_image, read, &dwBytesWritten, NULL );
+				DWORD read = 0;
+				// Set our file pointer to the beginning of the database file.
+				SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->offset, 0, FILE_BEGIN );
+				// Read the entire image into memory.
+				ReadFile( hFile, save_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
+				CloseHandle( hFile );
 
-				CloseHandle( hFile_save );
-			}
+				// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
+				wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
+				swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
 
-			// See if the path was too long.
-			if ( GetLastError() == ERROR_PATH_NOT_FOUND )
-			{
-				MessageBox( g_hWnd_main, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+				// Attempt to open a file for saving.
+				HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+				if ( hFile_save != INVALID_HANDLE_VALUE )
+				{
+					// Write the buffer to our file. Only write what we've read.
+					DWORD dwBytesWritten = 0;
+					WriteFile( hFile_save, save_image, read, &dwBytesWritten, NULL );
+
+					CloseHandle( hFile_save );
+				}
+
+				// See if the path was too long.
+				if ( GetLastError() == ERROR_PATH_NOT_FOUND )
+				{
+					MessageBox( g_hWnd_main, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+				}
 			}
+			// Free our buffer.
+			free( save_image );
 		}
-		// Free our buffer.
-		free( save_image );
 	}
 
 	free( save_type );
@@ -640,6 +644,46 @@ unsigned __stdcall read_database( void *pArguments )
 						break;
 					}
 				}
+				else if ( dh.version == WINDOWS_8 )
+				{
+					database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
+					ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
+					
+					// Make sure it's a thumbcache database and the stucture was filled correctly.
+					if ( read != sizeof( database_cache_entry_8 ) )
+					{
+						// EOF reached.
+						free( database_cache_entry );
+						free( filepath );
+
+						next_file = true;
+						break;
+					}
+					else if ( memcmp( ( ( database_cache_entry_8 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
+					{
+						free( database_cache_entry );
+
+						wchar_t msg[ 95 ] = { 0 };
+						swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
+						if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
+						{
+							// Walk back to the end of the last cache entry.
+							current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+
+							// If we found the beginning of the entry, attempt to read it again.
+							if ( scan_memory( hFile, current_position ) == true )
+							{
+								--i;
+								continue;
+							}
+						}
+
+						free( filepath );
+
+						next_file = true;
+						break;
+					}
+				}
 				else	// If this is true, then the file isn't from Vista or 7 and not supported by this program.
 				{
 					free( filepath );
@@ -651,7 +695,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Size of the cache entry.
-				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size );
+				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );
 
 				current_position += cache_entry_size;
 
@@ -671,7 +715,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 				
 				// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
-				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length );
+				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
 
 				// Skip blank filenames.
 				if ( filename_length == 0 )
@@ -726,7 +770,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Padding before the data entry.
-				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size );
+				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
 
 				// This will set our file pointer to the beginning of the data entry.
 				file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
@@ -745,16 +789,16 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Size of our image.
-				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size );
+				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
 
 				// Create a new info structure to send to the listview item's lParam value.
 				fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
 				fi->offset = file_position;
 				fi->size = data_size;
 
-				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash );
-				fi->data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum );
-				fi->header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum );
+				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );
+				fi->data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
+				fi->header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
 
 				// Read any data that exists and get its file extension.
 				if ( data_size != 0 )
