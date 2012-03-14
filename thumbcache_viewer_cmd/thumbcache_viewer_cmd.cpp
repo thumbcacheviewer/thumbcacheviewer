@@ -101,7 +101,7 @@ bool scan_memory( HANDLE hFile, unsigned int &offset )
 	{
 		// Begin reading through the database.
 		ReadFile( hFile, buf, sizeof( char ) * 102400, &read, NULL );
-		if ( read == 0 )
+		if ( read <= 4 )
 		{
 			free( buf );
 			return false;
