@@ -33,13 +33,28 @@
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
 #define WINDOWS_8		0x1A
+#define WINDOWS_8v2		0x1C
 
 // Thumbcache header information.
 struct database_header
 {
 	char magic_identifier[ 4 ];
 	unsigned int version;
-	unsigned int type;
+	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
+};
+
+// Found in everything but WINDOWS_8v2 databases.
+struct database_header_entry_info
+{
+	unsigned int first_cache_entry;
+	unsigned int available_cache_entry;
+	unsigned int number_of_cache_entries;
+};
+
+// Found in WINDOWS_8v2 databases.
+struct database_header_entry_info_v2
+{
+	unsigned int unknown;
 	unsigned int first_cache_entry;
 	unsigned int available_cache_entry;
 	unsigned int number_of_cache_entries;
@@ -308,7 +323,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 
 		printf( "---------------------------------------------\n" );
-		printf( "Extracting file header (24 bytes).\n" );
+		printf( "Extracting file header (%s bytes).\n", ( dh.version != WINDOWS_8v2 ? "24" : "28" ) );
 		printf( "---------------------------------------------\n" );
 
 		// Magic identifer.
@@ -325,7 +340,7 @@ int wmain( int argc, wchar_t *argv[] )
 		{
 			printf( "Version: Windows 7\n" );
 		}
-		else if ( dh.version == WINDOWS_8 )
+		else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )
 		{
 			printf( "Version: Windows 8\n" );
 		}
@@ -337,7 +352,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 
 		// Type of thumbcache database.
-		if ( dh.version != WINDOWS_8 )	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr
+		if ( dh.version != WINDOWS_8 && dh.version != WINDOWS_8v2 )	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr
 		{
 			if ( dh.type == 0x00 )
 			{
@@ -408,17 +423,39 @@ int wmain( int argc, wchar_t *argv[] )
 			}
 		}
 
+		unsigned int first_cache_entry = 0;
+		unsigned int available_cache_entry = 0;
+		unsigned int number_of_cache_entries = 0;
+
+		// WINDOWS_8v2 has an additional 4 bytes before the entry information.
+		if ( dh.version != WINDOWS_8v2 )
+		{
+			database_header_entry_info dhei = { 0 };
+			ReadFile( hFile, &dhei, sizeof( database_header_entry_info ), &read, NULL );
+			first_cache_entry = dhei.first_cache_entry;
+			available_cache_entry = dhei.available_cache_entry;
+			number_of_cache_entries = dhei.number_of_cache_entries;
+		}
+		else
+		{
+			database_header_entry_info_v2 dhei = { 0 };
+			ReadFile( hFile, &dhei, sizeof( database_header_entry_info_v2 ), &read, NULL );
+			first_cache_entry = dhei.first_cache_entry;
+			available_cache_entry = dhei.available_cache_entry;
+			number_of_cache_entries = dhei.number_of_cache_entries;
+		}
+
 		// Offset to the first cache entry.
-		printf( "Offset to first cache entry: %lu bytes\n", dh.first_cache_entry );
+		printf( "Offset to first cache entry: %lu bytes\n", first_cache_entry );
 
 		// Offset to the available cache entry.
-		printf( "Offset to available cache entry: %lu bytes\n", dh.available_cache_entry );
+		printf( "Offset to available cache entry: %lu bytes\n", available_cache_entry );
 
 		// Number of cache entries.
-		printf( "Number of cache entries: %lu\n", dh.number_of_cache_entries );
+		printf( "Number of cache entries: %lu\n", number_of_cache_entries );
 
-		// Set the file pointer to the first possible cache entry. (Should be at an offset of 24 bytes)
-		unsigned int current_position = 24;
+		// Set the file pointer to the first possible cache entry. (Should be at an offset equal to the size of the header)
+		unsigned int current_position = ( dh.version != WINDOWS_8v2 ? 24 : 28 );
 
 		// Create and set the directory that we'll be outputting files to.
 		if ( GetFileAttributes( output_path ) == INVALID_FILE_ATTRIBUTES )
@@ -469,10 +506,10 @@ int wmain( int argc, wchar_t *argv[] )
 								"Output path: %s\\<br /><br />" \
 								"<table border=1 cellspacing=0><tr><td>Index</td><td>Offset (bytes)</td><td>Cache Size (bytes)</td><td>Data Size (bytes)</td>%s<td>Entry Hash</td><td>Data Checksum</td><td>Header Checksum</td><td>Indentifier String</td><td>Image</td></tr>",
 								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : "Windows 8" ) ),
-								( dh.version != WINDOWS_8 ) ? \
+								( dh.version != WINDOWS_8 && dh.version != WINDOWS_8v2 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
 								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_sr.db" : ( dh.type == 0x07 ? "thumbcache_wide.db" : ( dh.type == 0x08 ? "thumbcache_exif.db" : "Unknown" ) ) ) ) ) ) ) ) ),
-								dh.first_cache_entry, dh.available_cache_entry, dh.number_of_cache_entries, utf8_path, ( dh.version == WINDOWS_8 ? "<td>Dimensions</td>" : "" ) );
+								first_cache_entry, available_cache_entry, number_of_cache_entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? "<td>Dimensions</td>" : "" ) );
 				WriteFile( hFile_html, buf, write_size, &written, NULL );
 
 				free( buf );
@@ -507,10 +544,10 @@ int wmain( int argc, wchar_t *argv[] )
 								"Output path,\"%s\\\"\r\n\r\n" \
 								"Index,Offset (bytes),Cache Size (bytes),Data Size (bytes),%sEntry Hash,Data Checksum,Header Checksum,Indentifier String\r\n",
 								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : "Windows 8" ) ),
-								( dh.version != WINDOWS_8 ) ? \
+								( dh.version != WINDOWS_8 && dh.version != WINDOWS_8v2 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
 								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_sr.db" : ( dh.type == 0x07 ? "thumbcache_wide.db" : ( dh.type == 0x08 ? "thumbcache_exif.db" : "Unknown" ) ) ) ) ) ) ) ) ),
-								dh.first_cache_entry, dh.available_cache_entry, dh.number_of_cache_entries, utf8_path, ( dh.version == WINDOWS_8 ? "Dimensions," : "" ) );
+								first_cache_entry, available_cache_entry, number_of_cache_entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? "Dimensions," : "" ) );
 				WriteFile( hFile_csv, buf, write_size, &written, NULL );
 
 				free( buf );
@@ -522,7 +559,7 @@ int wmain( int argc, wchar_t *argv[] )
 		free( utf8_path );
 
 		// Go through our database and attempt to extract each cache entry.
-		for ( unsigned int i = 0; i < dh.number_of_cache_entries; i++ )
+		for ( unsigned int i = 0; i < number_of_cache_entries; i++ )
 		{
 			printf( "\n---------------------------------------------\n" );
 			printf( "Extracting cache entry %lu at %lu bytes.\n", i + 1, current_position );
@@ -613,7 +650,7 @@ int wmain( int argc, wchar_t *argv[] )
 					break;
 				}
 			}
-			else if ( dh.version == WINDOWS_8 )
+			else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )
 			{
 				database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
@@ -651,12 +688,12 @@ int wmain( int argc, wchar_t *argv[] )
 			}
 
 			// Cache size includes the 4 byte signature and itself ( 4 bytes ).
-			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );		
+			unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );		
 			
 			current_position += cache_entry_size;
 
 			// The length of our filename.
-			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
+			unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
 
 			// Skip blank filenames.
 			if ( filename_length == 0 )
@@ -668,7 +705,7 @@ int wmain( int argc, wchar_t *argv[] )
 			}
 
 			// The magic identifier for the current entry.
-			char *magic_identifier = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->magic_identifier : ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier ) );
+			char *magic_identifier = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->magic_identifier : ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier ) );
 			memcpy( stmp, magic_identifier, sizeof( char ) * 4 );
 			printf( "Signature (magic identifier): %s\n", stmp );
 
@@ -676,7 +713,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 			// The entry hash may be the same as the filename.
 			char s_entry_hash[ 19 ] = { 0 };
-			sprintf_s( s_entry_hash, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) ) );	// This will probably be the same as the file name.
+			sprintf_s( s_entry_hash, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) ) );	// This will probably be the same as the file name.
 			printf_s( "Entry hash: %s\n", s_entry_hash );
 
 			// Windows Vista
@@ -689,31 +726,31 @@ int wmain( int argc, wchar_t *argv[] )
 			printf( "Identifier string size: %lu bytes\n", filename_length );
 
 			// Padding size.
-			unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
+			unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
 			printf( "Padding size: %lu bytes\n", padding_size );
 
 			// The size of our data.
-			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
+			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
 			printf( "Data size: %lu bytes\n", data_size );
 
 			// Windows 8 contains the width and height of the image.
-			if ( dh.version == WINDOWS_8 )
+			if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )
 			{
 				printf( "Dimensions: %lux%lu\n", ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height );
 			}
 
 			// Unknown value.
-			unsigned int unknown = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->unknown : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->unknown : ( ( database_cache_entry_vista * )database_cache_entry )->unknown ) );
+			unsigned int unknown = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->unknown : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->unknown : ( ( database_cache_entry_vista * )database_cache_entry )->unknown ) );
 			printf( "Unknown value: 0x%04x\n", unknown );
 
 			// CRC-64 data checksum.
 			char s_data_checksum[ 19 ] = { 0 };
-			sprintf_s( s_data_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) ) );
+			sprintf_s( s_data_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) ) );
 			printf_s( "Data checksum (CRC-64): %s\n", s_data_checksum );
 
 			// CRC-64 header checksum.
 			char s_header_checksum[ 19 ] = { 0 };
-			sprintf_s( s_header_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) ) );
+			sprintf_s( s_header_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) ) );
 			printf_s( "Header checksum (CRC-64): %s\n", s_header_checksum );
 
 			// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
@@ -812,7 +849,7 @@ int wmain( int argc, wchar_t *argv[] )
 			{
 				char buf[ 196 ];
 				int write_size = 0;
-				if ( dh.version == WINDOWS_8 )	// Windows 8 includes dimensions (width x height)
+				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )	// Windows 8 includes dimensions (width x height)
 				{
 					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%lux%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
 				}
@@ -854,7 +891,7 @@ int wmain( int argc, wchar_t *argv[] )
 			{
 				char buf[ 125 ];
 				int write_size = 0;
-				if ( dh.version == WINDOWS_8 )	// Windows 8 includes dimensions (width x height)
+				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )	// Windows 8 includes dimensions (width x height)
 				{
 					write_size = sprintf_s( buf, 125, "%lu,%lu,%lu,%lu,%lux%lu,%s,%s,%s,\"", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
 				}
