@@ -56,6 +56,7 @@
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
 #define WINDOWS_8		0x1A
+#define WINDOWS_8v2		0x1C
 
 #define MAX_ENTRIES		10240	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
 
@@ -71,6 +72,20 @@ struct database_header
 	char magic_identifier[ 4 ];
 	unsigned int version;
 	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
+};
+
+// Found in everything but WINDOWS_8v2 databases.
+struct database_header_entry_info
+{
+	unsigned int first_cache_entry;
+	unsigned int available_cache_entry;
+	unsigned int number_of_cache_entries;
+};
+
+// Found in WINDOWS_8v2 databases.
+struct database_header_entry_info_v2
+{
+	unsigned int unknown;
 	unsigned int first_cache_entry;
 	unsigned int available_cache_entry;
 	unsigned int number_of_cache_entries;
