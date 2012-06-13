@@ -152,7 +152,10 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						if ( g_filepath[ 1 ] == L':' && g_filepath[ 2 ] == L'\\' )
 						{
 							// Remove any trailing "\" from the path.
-							g_filepath[ length - 1 ] = '\0';
+							if ( g_filepath[ length - 1 ] == L'\\' )
+							{
+								g_filepath[ length - 1 ] = '\0';
+							}
 
 							// Now get our extension filters.
 							length = SendMessage( g_hWnd_extensions, WM_GETTEXT, MAX_PATH, ( LPARAM )( extension_filter + 1 ) );
