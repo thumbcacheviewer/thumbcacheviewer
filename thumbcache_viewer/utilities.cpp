@@ -17,6 +17,7 @@
 */
 
 #include "globals.h"
+#include "crc64.h"
 
 #define FILE_TYPE_BMP	"BM"
 #define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
@@ -36,6 +37,290 @@ bool in_thread = false;			// Flag to indicate that we're in a worker thread.
 bool skip_draw = false;			// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
 
 blank_entries_linked_list *g_be = NULL;	// A list to hold all of the blank entries.
+
+rbt_tree *fileinfo_tree = NULL;	// Red-black tree of fileinfo structures.
+
+CLSID clsid;					// Holds a drive's Volume GUID.
+unsigned int file_count = 0;	// Number of files scanned.
+unsigned int match_count = 0;	// Number of files that match an entry hash.
+
+int rbt_compare( void *a, void *b )
+{
+	if ( a > b )
+	{
+		return 1;
+	}
+	
+	if ( a < b )
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+wchar_t *get_extension_from_filename( wchar_t *filename, unsigned long length )
+{
+	while ( length != 0 && filename[ --length ] != L'.' );
+
+	return filename + length;
+}
+
+wchar_t *get_filename_from_path( wchar_t *path, unsigned long length )
+{
+	while ( length != 0 && path[ --length ] != L'\\' );
+
+	if ( path[ length ] == L'\\' )
+	{
+		++length;
+	}
+	return path + length;
+}
+
+unsigned long long hash_data( char *data, unsigned long long hash, short length )
+{
+	while ( length-- > 0 )
+	{
+		hash = ( ( ( hash * 0x820 ) + ( *data++ & 0x00000000000000FF ) ) + ( hash >> 2 ) ) ^ hash;
+	}
+
+	return hash;
+}
+
+void hash_file( wchar_t *filepath, wchar_t *extension )
+{
+	// Initial hash value. This value was found in shell32.dll.
+	unsigned long long hash = 0x95E729BA2C37FD21;	
+
+	// Hash Volume GUID
+	hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
+
+	// Hash File ID - found in the Master File Table.
+	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL );
+	BY_HANDLE_FILE_INFORMATION bhfi;
+	GetFileInformationByHandle( hFile, &bhfi );
+	CloseHandle( hFile );
+	unsigned long long file_id = bhfi.nFileIndexHigh;
+	file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
+	
+	hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
+
+	// Hash Wide Character File Extension
+	hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
+
+	// Hash Last Modified DOS Time
+	unsigned short fat_date;
+	unsigned short fat_time;
+	FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
+	unsigned int dos_time = fat_date;
+	dos_time = ( dos_time << 16 ) | fat_time;
+
+	hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+
+	// Now that we have a hash value to compare, search our fileinfo tree for the same value.
+	fileinfo *fi = ( fileinfo * )rbt_find( fileinfo_tree, ( void * )hash, true );
+	if ( fi != NULL )
+	{
+		++match_count;
+
+		// Replace the hash filename with the local filename.
+		free( fi->filename );
+		fi->filename = _wcsdup( filepath );
+	}
+
+	++file_count; 
+
+	// Update our scan window with new scan information.
+	if ( show_details == true )
+	{
+		SendMessage( g_hWnd_hashing, WM_SETTEXT, 0, ( LPARAM )filepath );
+		wchar_t buf[ 19 ] = { 0 };
+		swprintf_s( buf, 19, L"0x%016llx", hash );
+		SendMessage( g_hWnd_static_hash, WM_SETTEXT, 0, ( LPARAM )buf );
+		swprintf_s( buf, 19, L"%lu", file_count );
+		SendMessage( g_hWnd_static_count, WM_SETTEXT, 0, ( LPARAM )buf );
+	}
+}
+
+void traverse_directory( wchar_t *path )
+{
+	// We don't want to continue scanning if the user cancels the scan.
+	if ( kill_scan == true )
+	{
+		return;
+	}
+
+	// Set the file path to search for all files/folders in the current directory.
+	wchar_t filepath[ MAX_PATH ];
+	swprintf_s( filepath, MAX_PATH, L"%s\\*", path );
+
+	WIN32_FIND_DATA FindFileData;
+	HANDLE hFind = FindFirstFileEx( ( LPCWSTR )filepath, FindExInfoStandard, &FindFileData, FindExSearchNameMatch, NULL, 0 );
+	if ( hFind != INVALID_HANDLE_VALUE ) 
+	{
+		do
+		{
+			if ( kill_scan == true )
+			{
+				break;	// We need to close the find file handle.
+			}
+
+			wchar_t next_path[ MAX_PATH ];
+
+			// See if the file is a directory.
+			if ( ( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
+			{
+				// Go through all directories except "." and ".." (current and parent)
+				if ( ( wcscmp( FindFileData.cFileName, L"." ) != 0 ) && ( wcscmp( FindFileData.cFileName, L".." ) != 0 ) )
+				{
+					// Move to the next directory.
+					swprintf_s( next_path, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
+
+					traverse_directory( next_path );
+
+					// Only hash folders if enabled.
+					if ( include_folders == true )
+					{
+						hash_file( next_path, L"" );
+					}
+				}
+			}
+			else
+			{
+				// See if the file's extension is in our filter. Go to the next file if it's not.
+				wchar_t *ext = get_extension_from_filename( FindFileData.cFileName, wcslen( FindFileData.cFileName ) );
+				if ( extension_filter[ 0 ] != 0 )
+				{
+					// Do a case-insensitive substring search for the extension.
+					int ext_length = wcslen( ext );
+					wchar_t *temp_ext = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ext_length + 3 ) );
+					for ( int i = 0; i < ext_length; ++i )
+					{
+						temp_ext[ i + 1 ] = towlower( ext[ i ] );
+					}
+					temp_ext[ 0 ] = L'|';				// Append the delimiter to the beginning of the string.
+					temp_ext[ ext_length + 1 ] = L'|';	// Append the delimiter to the end of the string.
+					temp_ext[ ext_length + 2 ] = L'\0';
+
+					if ( wcsstr( extension_filter, temp_ext ) == NULL )
+					{
+						free( temp_ext );
+						continue;
+					}
+
+					free( temp_ext );
+				}
+
+				swprintf_s( next_path, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
+
+				hash_file( next_path, ext );
+			}
+		}
+		while ( FindNextFile( hFind, &FindFileData ) != 0 );	// Go to the next file.
+
+		FindClose( hFind );	// Close the find file handle.
+	}
+}
+
+unsigned __stdcall scan_files( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	SetWindowText( g_hWnd_scan, L"Map File Paths to Entry Hashes - Please wait..." );	// Update the window title.
+	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, TRUE, 0 );	// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+
+	// File path will be at least 3 characters. Copy our drive to get the volume GUID.
+	wchar_t drive[ 4 ] = { 0 };
+	wcsncpy_s( drive, 4, g_filepath, 3 );
+
+	// Get the volume GUID first.
+	wchar_t volume_guid[ 50 ] = { 0 };
+	if ( GetVolumeNameForVolumeMountPoint( drive, volume_guid, 50 ) == TRUE )
+	{
+		// Disable scan button, enable cancel button.
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 1, 0 );
+
+		volume_guid[ 48 ] = L'\0';
+		CLSIDFromString( ( LPOLESTR )( volume_guid + 10 ), &clsid );
+
+		LVITEM lvi = { NULL };
+		lvi.mask = LVIF_PARAM;
+
+		int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+		// Create the fileinfo tree if it doesn't exist.
+		if ( fileinfo_tree == NULL )
+		{
+			fileinfo_tree = rbt_create( rbt_compare );
+		}
+
+		// Go through each item and add them to our tree.
+		for ( int i = 0; i < item_count; ++i )
+		{
+			// We don't want to continue scanning if the user cancels the scan.
+			if ( kill_scan == true )
+			{
+				break;
+			}
+
+			lvi.iItem = i;
+			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			// Don't attempt to insert the fileinfo if it's already in the tree, or if it's a duplicate.
+			if ( !( ( ( fileinfo * )lvi.lParam )->flag & 8 ) && rbt_insert( fileinfo_tree, ( void * )( ( fileinfo * )lvi.lParam )->entry_hash, ( fileinfo * )lvi.lParam ) != RBT_STATUS_DUPLICATE_KEY )
+			{
+				( ( fileinfo * )lvi.lParam )->flag |= 8;
+			}
+		}
+
+		file_count = 0;		// Reset the file count.
+		match_count = 0;	// Reset the match count.
+		traverse_directory( g_filepath );
+
+		InvalidateRect( g_hWnd_list, NULL, TRUE );
+
+		// Update the details.
+		if ( kill_scan == false )
+		{
+			SendMessage( g_hWnd_hashing, WM_SETTEXT, 0, 0 );
+			SendMessage( g_hWnd_static_hash, WM_SETTEXT, 0, 0 );
+		}
+
+		if ( show_details == false )
+		{
+			swprintf_s( volume_guid, 50, L"%lu", file_count );
+			SendMessage( g_hWnd_static_count, WM_SETTEXT, 0, ( LPARAM )volume_guid );
+		}
+
+		// Enable scan button, disable cancel button.
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 2, 0 );
+
+		if ( match_count > 0 )
+		{
+			wchar_t msg[ 30 ] = { 0 };
+			swprintf_s( msg, 30, L"%d file%s mapped.", match_count, ( match_count > 1 ? L"s were" : L" was" ) );
+			MessageBox( g_hWnd_scan, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+		}
+		else
+		{
+			MessageBox( g_hWnd_scan, L"No files were mapped.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+		}
+	}
+	else
+	{
+		MessageBox( g_hWnd_scan, L"Volume name could not be found.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+	}
+
+	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	SetWindowText( g_hWnd_scan, L"Map File Paths to Entry Hashes" );	// Reset the window title.
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
 
 bool scan_memory( HANDLE hFile, unsigned int &offset )
 {
@@ -146,6 +431,10 @@ unsigned __stdcall remove_items( void *pArguments )
 			free( ( fileinfo * )lvi.lParam );
 		}
 
+		// Clean up our fileinfo tree.
+		rbt_delete( fileinfo_tree );
+		fileinfo_tree = NULL;
+
 		SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
 	}
 	else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
@@ -176,6 +465,15 @@ unsigned __stdcall remove_items( void *pArguments )
 			// We first need to get the lParam value otherwise the memory won't be freed.
 			lvi.iItem = index_array[ i ];
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			// Remove the fileinfo from the fileinfo tree if it exists in it.
+			if ( ( ( fileinfo * )lvi.lParam )->flag & 8 )
+			{
+				// First find the fileinfo to remove from the fileinfo tree.
+				rbt_iterator *itr = rbt_find( fileinfo_tree, ( void * )( ( fileinfo * )lvi.lParam )->entry_hash, false );
+				// Now remove it from the fileinfo tree. The tree will rebalance itself.
+				rbt_remove( fileinfo_tree, itr );
+			}
 
 			( ( fileinfo * )lvi.lParam )->si->count--;
 
@@ -318,6 +616,189 @@ unsigned __stdcall show_hide_items( void *pArguments )
 	return 0;
 }
 
+unsigned __stdcall verify_checksums( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
+
+	// Create our buffers to hash.
+	char *header_buffer = NULL;
+	char *data_buffer = NULL;
+	char *tmp_data = NULL;	// Used to offset the data buffer.
+
+	unsigned int bad_header = 0;
+	unsigned int bad_data = 0;
+
+	unsigned int header_size = 0;
+
+	LVITEM lvi = { NULL };
+	lvi.mask = LVIF_PARAM;
+
+	int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+	// Go through each item to compare values.
+	for ( int i = 0; i < item_count; ++i )
+	{
+		// Stop processing and exit the thread.
+		if ( kill_thread == true )
+		{
+			break;
+		}
+
+		lvi.iItem = i;
+		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+		// Skip entries that we've already verified, but count bad checksums.
+		if ( ( ( fileinfo * )lvi.lParam )->flag >= 16 )
+		{
+			if ( ( ( fileinfo * )lvi.lParam )->flag & 32 )
+			{
+				++bad_header;
+			}
+
+			if ( ( ( fileinfo * )lvi.lParam )->flag & 64 )
+			{
+				++bad_data;
+			}
+
+			continue;
+		}
+
+		// Get the header size of the current entry.
+		header_size = ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 ? sizeof( database_cache_entry_7 ) : ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v2 ? sizeof( database_cache_entry_8 ) : sizeof( database_cache_entry_vista ) ) ) - sizeof( unsigned long long );
+
+		// Attempt to open a file for reading.
+		HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+		if ( hFile != INVALID_HANDLE_VALUE )
+		{
+			( ( fileinfo * )lvi.lParam )->flag |= 16;	// Entry has been verified
+
+			header_buffer = ( char * )malloc( sizeof( char ) * header_size );
+
+			DWORD read = 0;
+			// Set our file pointer to the beginning of the database file.
+			SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->header_offset, 0, FILE_BEGIN );
+			// Read the header into memory.
+			ReadFile( hFile, header_buffer, header_size, &read, NULL );
+
+			data_buffer = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
+			tmp_data = data_buffer;
+
+			// Set our file pointer to the beginning of the database file.
+			SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->data_offset, 0, FILE_BEGIN );
+			// Read the entire image into memory.
+			ReadFile( hFile, data_buffer, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
+			CloseHandle( hFile );
+
+			// The header checksum uses an initial CRC of -1
+			( ( fileinfo * )lvi.lParam )->v_header_checksum = crc64( header_buffer, header_size, 0xFFFFFFFFFFFFFFFF );
+			if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
+			{
+				( ( fileinfo * )lvi.lParam )->flag |= 32;	// Header checksum is invalid.
+				++bad_header;
+			}
+
+			free( header_buffer );
+
+			// If the data is larger than 1024 bytes, then we're going to generate two CRCs and xor them together.
+			if ( read > 1024 )
+			{
+				// The first checksum uses an initial CRC of 0. We read the first 1024 bytes.
+				unsigned long long first_crc = crc64( tmp_data, 1024, 0x0000000000000000 );
+				tmp_data += 1024;
+
+				// Break the remaining data into 400 byte chunks.
+				read -= 1024;
+				int chunks = read / 400;
+
+				// The second CRC also uses an initial CRC of 0.
+				unsigned long long second_crc = 0x0000000000000000;
+
+				// For each of these chunks, we hash the first 4 bytes.
+				for ( int i = 0; i < chunks; ++i )
+				{
+					second_crc = crc64( tmp_data, 4, second_crc );
+					tmp_data += 400;	// Move to the next chunk.
+				}
+
+				// See how many bytes we have left.
+				int remaining = read % 400;
+				if ( remaining > 0 )
+				{
+					// If we have more than 4 bytes left to hash, then set it to 4.
+					if ( remaining > 4 )
+					{
+						remaining = 4;
+					}
+					second_crc = crc64( tmp_data, remaining, second_crc );
+				}
+
+				// xor the two CRCs to generate the final data checksum.
+				( ( fileinfo * )lvi.lParam )->v_data_checksum = ( first_crc ^ second_crc );
+			}
+			else	// Data is less than or equal to 1024 bytes
+			{
+				// The header checksum uses an initial CRC of 0
+				( ( fileinfo * )lvi.lParam )->v_data_checksum = crc64( tmp_data, read, 0x0000000000000000 );
+			}
+
+			if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
+			{
+				( ( fileinfo * )lvi.lParam )->flag |= 64;	// Data checksum is invalid.
+				++bad_data;
+			}
+
+			free( data_buffer );
+		}
+	}
+
+	if ( bad_header > 0 )
+	{
+		wchar_t msg[ 51 ] = { 0 };
+		swprintf_s( msg, 51, L"%d mismatched header checksum%s found.", bad_header, ( bad_header > 1 ? L"s were" : L" was" ) );
+		MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+	}
+
+	if ( bad_data > 0 )
+	{
+		wchar_t msg[ 49 ] = { 0 };
+		swprintf_s( msg, 49, L"%d mismatched data checksum%s found.", bad_data, ( bad_data > 1 ? L"s were" : L" was" ) );
+		MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+	}
+
+	if ( bad_header == 0 && bad_data == 0 )
+	{
+		MessageBox( g_hWnd_main, L"All checksums are valid.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+	}
+
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys. 
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
 unsigned __stdcall save_items( void *pArguments )
 {
 	// This will block every other thread from entering until the first thread is complete.
@@ -369,14 +850,59 @@ unsigned __stdcall save_items( void *pArguments )
 			{
 				DWORD read = 0;
 				// Set our file pointer to the beginning of the database file.
-				SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->offset, 0, FILE_BEGIN );
+				SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->data_offset, 0, FILE_BEGIN );
 				// Read the entire image into memory.
 				ReadFile( hFile, save_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
 				CloseHandle( hFile );
 
 				// Directory + backslash + filename + extension + NULL character = ( 2 * MAX_PATH ) + 6
 				wchar_t fullpath[ ( 2 * MAX_PATH ) + 6 ] = { 0 };
-				swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, ( ( fileinfo * )lvi.lParam )->filename );
+
+				wchar_t *filename = get_filename_from_path( ( ( fileinfo * )lvi.lParam )->filename, wcslen( ( ( fileinfo * )lvi.lParam )->filename ) );
+
+				if ( ( ( fileinfo * )lvi.lParam )->flag & 1 )
+				{
+					wchar_t *ext = get_extension_from_filename( filename, wcslen( filename ) );
+					// The extension in the filename might not be the actual type. So we'll append .bmp to the end of it.
+					if ( _wcsicmp( ext, L".bmp" ) == 0 )
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, filename );
+					}
+					else
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s.bmp", save_directory, filename );
+					}
+				}
+				else if ( ( ( fileinfo * )lvi.lParam )->flag & 2 )
+				{
+					wchar_t *ext = get_extension_from_filename( filename, wcslen( filename ) );
+					// The extension in the filename might not be the actual type. So we'll append .jpg to the end of it.
+					if ( _wcsicmp( ext, L".jpg" ) == 0 || _wcsicmp( ext, L".jpeg" ) == 0 )
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, filename );
+					}
+					else
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s.jpg", save_directory, filename );
+					}
+				}
+				else if ( ( ( fileinfo * )lvi.lParam )->flag & 4 )
+				{
+					wchar_t *ext = get_extension_from_filename( filename, wcslen( filename ) );
+					// The extension in the filename might not be the actual type. So we'll append .png to the end of it.
+					if ( _wcsicmp( ext, L".png" ) == 0 )
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, filename );
+					}
+					else
+					{
+						swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s.png", save_directory, filename );
+					}
+				}
+				else
+				{
+					swprintf_s( fullpath, ( 2 * MAX_PATH ) + 6, L"%s\\%.259s", save_directory, filename );
+				}
 
 				// Attempt to open a file for saving.
 				HANDLE hFile_save = CreateFile( fullpath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -552,6 +1078,7 @@ unsigned __stdcall read_database( void *pArguments )
 			bool offset_beginning = ( entry_begin > 1 ? true : false );
 
 			bool next_file = false;	// Go to the next database file.
+			unsigned int header_offset = 0;
 
 			// Go through our database and attempt to extract each cache entry.
 			for ( unsigned int i = 1; i <= entry_end; ++i )
@@ -710,6 +1237,8 @@ unsigned __stdcall read_database( void *pArguments )
 					break;
 				}
 
+				header_offset = current_position;
+
 				// Size of the cache entry.
 				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );
 
@@ -809,12 +1338,14 @@ unsigned __stdcall read_database( void *pArguments )
 
 				// Create a new info structure to send to the listview item's lParam value.
 				fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
-				fi->offset = file_position;
+				fi->flag = 0;
+				fi->header_offset = header_offset;
+				fi->data_offset = file_position;
 				fi->size = data_size;
 
 				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );
-				fi->data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
-				fi->header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
+				fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
+				fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
 
 				// Read any data that exists and get its file extension.
 				if ( data_size != 0 )
@@ -842,23 +1373,22 @@ unsigned __stdcall read_database( void *pArguments )
 					if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
 					{
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".bmp", 4 );
-						fi->extension = 0;
+						fi->flag = 1;
 					}
 					else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
 					{
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".jpg", 4 );
-						fi->extension = 1;
+						fi->flag = 2;
 					}
 					else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
 					{
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".png", 4 );
-						fi->extension = 2;
+						fi->flag = 4;
 					}
 					else if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
 					{
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
-						fi->extension = 3;	// Unknown extension
 					}
 
 					// Free our data buffer.
@@ -875,8 +1405,6 @@ unsigned __stdcall read_database( void *pArguments )
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
 						wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
 					}
-
-					fi->extension = 3;	// Unknown extension
 				}
 
 				fi->filename = filename;	// Gets deleted during shutdown.
