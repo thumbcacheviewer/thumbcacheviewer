@@ -230,9 +230,11 @@ unsigned __stdcall scan_files( void *pArguments )
 	SetWindowText( g_hWnd_scan, L"Map File Paths to Entry Hashes - Please wait..." );	// Update the window title.
 	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, TRUE, 0 );	// SetCursor only works from the main thread. Set it to an arrow with hourglass.
 
-	// File path will be at least 3 characters. Copy our drive to get the volume GUID.
+	// File path will be at least 2 characters. Copy our drive to get the volume GUID.
 	wchar_t drive[ 4 ] = { 0 };
-	wcsncpy_s( drive, 4, g_filepath, 3 );
+	wmemcpy_s( drive, 4, g_filepath, 2 );
+	drive[ 2 ] = L'\\';	// Ensure the drive ends with "\".
+	drive[ 3 ] = L'\0';
 
 	// Get the volume GUID first.
 	wchar_t volume_guid[ 50 ] = { 0 };

@@ -60,7 +60,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			GetCurrentDirectory( MAX_PATH, current_directory );
 
 			HWND g_hWnd_static1 = CreateWindow( WC_STATIC, L"Initial scan directory:", WS_CHILD | WS_VISIBLE, 5, 5, rc.right - 10, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_path = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, current_directory, ES_AUTOHSCROLL | WS_CHILD | WS_VISIBLE, 5, 20, rc.right - 45, 20, hWnd, ( HMENU )EDIT_PATH, NULL, NULL );
+			g_hWnd_path = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, current_directory, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE, 5, 20, rc.right - 45, 20, hWnd, ( HMENU )EDIT_PATH, NULL, NULL );
 			SendMessage( g_hWnd_path, EM_LIMITTEXT, MAX_PATH - 1, 0 );
 
 			g_hWnd_load = CreateWindow( WC_BUTTON, L"...", WS_CHILD | WS_TABSTOP | WS_VISIBLE, rc.right - 35, 20, 30, 20, hWnd, ( HMENU )BTN_LOAD, NULL, NULL );
@@ -151,11 +151,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						// We need to have at least the drive path. Example: "C:\"
 						if ( g_filepath[ 1 ] == L':' && g_filepath[ 2 ] == L'\\' )
 						{
-							// Remove any trailing "\" from the path if it's not just the drive.
-							if ( length >= 4 && g_filepath[ length - 1 ] == '\\' )
-							{
-								g_filepath[ length - 1 ] = '\0';
-							}
+							// Remove any trailing "\" from the path.
+							g_filepath[ length - 1 ] = '\0';
 
 							// Now get our extension filters.
 							length = SendMessage( g_hWnd_extensions, WM_GETTEXT, MAX_PATH, ( LPARAM )( extension_filter + 1 ) );
