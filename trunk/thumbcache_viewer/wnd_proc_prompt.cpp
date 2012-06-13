@@ -91,6 +91,7 @@ LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 					// Reenable the main window.
 					EnableWindow( g_hWnd_main, TRUE );
+					SetForegroundWindow( g_hWnd_main );
 
 					ShowWindow( hWnd, SW_HIDE );
 				}
@@ -114,6 +115,7 @@ LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 			// Reenable the main window.
 			EnableWindow( g_hWnd_main, TRUE );
+			SetForegroundWindow( g_hWnd_main );
 
 			ShowWindow( hWnd, SW_HIDE );
 		}

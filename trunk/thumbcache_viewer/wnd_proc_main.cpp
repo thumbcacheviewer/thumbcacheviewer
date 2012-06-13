@@ -81,6 +81,8 @@ void update_menus( bool disable_all )
 		EnableMenuItem( g_hMenu, MENU_REMOVE_SEL, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_HIDE_BLANK, MF_DISABLED );
+		EnableMenuItem( g_hMenu, MENU_CHECKSUMS, MF_DISABLED );
+		EnableMenuItem( g_hMenu, MENU_SCAN, MF_DISABLED );
 		EnableMenuItem( g_hMenuSub_context, MENU_SAVE_SEL, MF_DISABLED );
 		EnableMenuItem( g_hMenuSub_context, MENU_REMOVE_SEL, MF_DISABLED );
 		EnableMenuItem( g_hMenuSub_context, MENU_SELECT_ALL, MF_DISABLED );
@@ -92,10 +94,14 @@ void update_menus( bool disable_all )
 
 		if ( item_count > 0 )
 		{
+			EnableMenuItem( g_hMenu, MENU_CHECKSUMS, MF_ENABLED );
+			EnableMenuItem( g_hMenu, MENU_SCAN, MF_ENABLED );
 			EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
 		}
 		else
 		{
+			EnableMenuItem( g_hMenu, MENU_CHECKSUMS, MF_DISABLED );
+			EnableMenuItem( g_hMenu, MENU_SCAN, MF_DISABLED );
 			EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_DISABLED );
 		}
 
@@ -134,7 +140,6 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
 	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
 	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
-	char checksum1[ 17 ], checksum2[ 17 ];
 
 	// We added NUM_COLUMNS to the lParamSort value in order to distinguish between items we want to sort up, and items we want to sort down.
 	// Saves us from having to pass some arbitrary struct pointer.
@@ -156,31 +161,43 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 3:
 			{
-				return ( fi1->offset > fi2->offset );
+				return ( fi1->data_offset > fi2->data_offset );
 			}
 			break;
 
 			case 4:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->data_checksum );
-				sprintf_s( checksum2, 17, "%016llx", fi2->data_checksum );
-				return strcmp( checksum1, checksum2 );
+				if ( fi1->v_data_checksum != fi1->data_checksum && fi2->v_data_checksum == fi2->data_checksum )
+				{
+					return 0;
+				}
+				else if ( fi1->v_data_checksum == fi1->data_checksum && fi2->v_data_checksum != fi2->data_checksum )
+				{
+					return 1;
+				}
+
+				return ( fi1->data_checksum > fi2->data_checksum );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->header_checksum );
-				sprintf_s( checksum2, 17, "%016llx", fi2->header_checksum );
-				return strcmp( checksum1, checksum2 );
+				if ( fi1->v_header_checksum != fi1->header_checksum && fi2->v_header_checksum == fi2->header_checksum )
+				{
+					return 0;
+				}
+				else if ( fi1->v_header_checksum == fi1->header_checksum && fi2->v_header_checksum != fi2->header_checksum )
+				{
+					return 1;
+				}
+
+				return ( fi1->header_checksum > fi2->header_checksum );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->entry_hash );
-				sprintf_s( checksum2, 17, "%016llx", fi2->entry_hash );
-				return strcmp( checksum1, checksum2 );
+				return ( fi1->entry_hash > fi2->entry_hash );
 			}
 			break;
 
@@ -221,31 +238,43 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 			case 3:
 			{
-				return ( fi2->offset > fi1->offset );
+				return ( fi2->data_offset > fi1->data_offset );
 			}
 			break;
 
 			case 4:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->data_checksum );
-				sprintf_s( checksum2, 17, "%016llx", fi2->data_checksum );
-				return strcmp( checksum2, checksum1 );
+				if ( fi1->v_data_checksum != fi1->data_checksum && fi2->v_data_checksum == fi2->data_checksum )
+				{
+					return 1;
+				}
+				else if ( fi1->v_data_checksum == fi1->data_checksum && fi2->v_data_checksum != fi2->data_checksum )
+				{
+					return 0;
+				}
+
+				return ( fi2->data_checksum > fi1->data_checksum );
 			}
 			break;
 
 			case 5:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->header_checksum );
-				sprintf_s( checksum2, 17, "%016llx", fi2->header_checksum );
-				return strcmp( checksum2, checksum1 );
+				if ( fi1->v_header_checksum != fi1->header_checksum && fi2->v_header_checksum == fi2->header_checksum )
+				{
+					return 1;
+				}
+				else if ( fi1->v_header_checksum == fi1->header_checksum && fi2->v_header_checksum != fi2->header_checksum )
+				{
+					return 0;
+				}
+
+				return ( fi2->header_checksum > fi1->header_checksum );
 			}
 			break;
 
 			case 6:
 			{
-				sprintf_s( checksum1, 17, "%016llx", fi1->entry_hash );
-				sprintf_s( checksum2, 17, "%016llx", fi2->entry_hash );
-				return strcmp( checksum2, checksum1 );
+				return ( fi2->entry_hash > fi1->entry_hash );
 			}
 			break;
 
@@ -281,6 +310,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			HMENU hMenuSub_file = CreatePopupMenu();
 			HMENU hMenuSub_edit = CreatePopupMenu();
 			HMENU hMenuSub_view = CreatePopupMenu();
+			HMENU hMenuSub_tools = CreatePopupMenu();
 			HMENU hMenuSub_help = CreatePopupMenu();
 			g_hMenuSub_context = CreatePopupMenu();
 
@@ -343,10 +373,25 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			mii.fState = MFS_ENABLED;
 			InsertMenuItem( hMenuSub_view, 0, TRUE, &mii );
 
+			// TOOLS MENU
+			mii.fType = MFT_STRING;
+			mii.dwTypeData = L"Verify Checksums\tCtrl+V";
+			mii.cch = 23;
+			mii.wID = MENU_CHECKSUMS;
+			mii.fState = MFS_DISABLED;
+			InsertMenuItem( hMenuSub_tools, 0, TRUE, &mii );
+
+			mii.fType = MFT_STRING;
+			mii.dwTypeData = L"Map File Paths...\tCtrl+M";
+			mii.cch = 24;
+			mii.wID = MENU_SCAN;
+			InsertMenuItem( hMenuSub_tools, 1, TRUE, &mii );
+
 			// HELP MENU
 			mii.dwTypeData = L"&About";
 			mii.cch = 6;
 			mii.wID = MENU_ABOUT;
+			mii.fState = MFS_ENABLED;
 			InsertMenuItem( hMenuSub_help, 0, TRUE, &mii );
 
 			// MENU BAR
@@ -366,10 +411,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			mii.hSubMenu = hMenuSub_view;
 			InsertMenuItem( g_hMenu, 2, TRUE, &mii );
 
+			mii.dwTypeData = L"&Tools";
+			mii.cch = 6;
+			mii.hSubMenu = hMenuSub_tools;
+			InsertMenuItem( g_hMenu, 3, TRUE, &mii );
+
 			mii.dwTypeData = L"&Help";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_help;
-			InsertMenuItem( g_hMenu, 3, TRUE, &mii );
+			InsertMenuItem( g_hMenu, 4, TRUE, &mii );
 
 			// Set our menu bar.
 			SetMenu( hWnd, g_hMenu );
@@ -731,6 +781,19 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					}
 					break;
 
+					case MENU_CHECKSUMS:
+					{
+						// Go through each item in the list and verify the header and data checksums.
+						CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &verify_checksums, ( void * )NULL, 0, NULL ) );
+					}
+					break;
+
+					case MENU_SCAN:
+					{
+						SendMessage( g_hWnd_scan, WM_PROPAGATE, 0, 0 );
+					}
+					break;
+
 					case MENU_REMOVE_SEL:
 					{
 						// Hide the image window since the selected item will be deleted.
@@ -807,6 +870,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							case 'H':	// Hide blank entries if Ctrl + H is down.
 							{
 								SendMessage( hWnd, WM_COMMAND, MENU_HIDE_BLANK, 0 );
+							}
+							break;
+
+							case 'V':	// Verify checksums.
+							{
+								if ( SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) > 0 )
+								{
+									SendMessage( hWnd, WM_COMMAND, MENU_CHECKSUMS, 0 );
+								}
+							}
+							break;
+
+							case 'M':	// Map entry hash values to local files.
+							{
+								if ( SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) > 0 )
+								{
+									SendMessage( hWnd, WM_COMMAND, MENU_SCAN, 0 );
+								}
 							}
 							break;
 
@@ -981,7 +1062,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						DWORD read = 0;
 						// Set our file pointer to the beginning of the database file.
-						SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->offset, 0, FILE_BEGIN );
+						SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->data_offset, 0, FILE_BEGIN );
 						// Read the entire image into memory.
 						ReadFile( hFile, current_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
 						CloseHandle( hFile );
@@ -1020,15 +1101,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 
 						// Set our image window's icon to match the file extension.
-						if ( ( ( fileinfo * )lvi.lParam )->extension == 0 )
+						if ( ( ( fileinfo * )lvi.lParam )->flag & 1 )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_bmp );
 						}
-						else if ( ( ( fileinfo * )lvi.lParam )->extension == 1 )
+						else if ( ( ( fileinfo * )lvi.lParam )->flag & 2 )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_jpg );
 						}
-						else if ( ( ( fileinfo * )lvi.lParam )->extension == 2 )
+						else if ( ( ( fileinfo * )lvi.lParam )->flag & 4 )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_png );
 						}
@@ -1252,11 +1333,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
 							if ( is_kbytes_offset == true )
 							{
-								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->offset );
+								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->data_offset );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->offset / 1024 );
+								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->data_offset / 1024 );
 							}
 						}
 						break;
@@ -1266,11 +1347,21 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_dc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
+								int out = swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
+
+								if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
+								{
+									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llx", ( ( fileinfo * )lvi.lParam )->v_data_checksum );
+								}
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
+								int out = swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
+
+								if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
+								{
+									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llX", ( ( fileinfo * )lvi.lParam )->v_data_checksum );
+								}
 							}
 						}
 						break;
@@ -1280,11 +1371,21 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_hc_lower == true )
 							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
+								int out = swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
+
+								if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
+								{
+									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llx", ( ( fileinfo * )lvi.lParam )->v_header_checksum );
+								}
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
+								int out = swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
+
+								if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
+								{
+									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llX", ( ( fileinfo * )lvi.lParam )->v_header_checksum );
+								}
 							}
 						}
 						break;
@@ -1391,8 +1492,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						// Shadow color - light grey.
 						SetTextColor( hdcMem, RGB( 0xE0, 0xE0, 0xE0 ) );
 						DrawText( hdcMem, buf, -1, &rc2, DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
-						// Black text.
-						SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
+
+						// Show red text if our checksums don't match and black for everything else.
+						SetTextColor( hdcMem, RGB( ( ( ( i == 4 && ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum ) ) || ( i == 5 && ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
+
 						DrawText( hdcMem, buf, -1, &rc, DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCAND );
 					}
@@ -1486,6 +1589,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				free( del_be->fi );
 				free( del_be );
 			}
+
+			// Clean up our fileinfo tree.
+			rbt_delete( fileinfo_tree );
 
 			PostQuitMessage( 0 );
 			return 0;

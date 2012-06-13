@@ -37,6 +37,8 @@
 #include <gdiplus.h>
 #include <process.h>
 
+#include "rbt.h"
+
 #include "resource.h"
 
 #define PROGRAM_CAPTION L"Thumbcache Viewer"
@@ -52,6 +54,8 @@
 #define MENU_SELECT_ALL	1006
 #define MENU_REMOVE_SEL	1007
 #define MENU_HIDE_BLANK	1008
+#define MENU_CHECKSUMS	1009
+#define MENU_SCAN		1010
 
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
@@ -96,13 +100,13 @@ struct database_cache_entry_7
 {
 	char magic_identifier[ 4 ];
 	unsigned int cache_entry_size;
-	long long entry_hash;
+	unsigned long long entry_hash;
 	unsigned int filename_length;
 	unsigned int padding_size;
 	unsigned int data_size;
 	unsigned int unknown;
-	long long data_checksum;
-	long long header_checksum;
+	unsigned long long data_checksum;
+	unsigned long long header_checksum;
 };
 
 // Window 8 Thumbcache entry.
@@ -110,15 +114,15 @@ struct database_cache_entry_8
 {
 	char magic_identifier[ 4 ];
 	unsigned int cache_entry_size;
-	long long entry_hash;
+	unsigned long long entry_hash;
 	unsigned int filename_length;
 	unsigned int padding_size;
 	unsigned int data_size;
 	unsigned int width;
 	unsigned int height;
 	unsigned int unknown;
-	long long data_checksum;
-	long long header_checksum;
+	unsigned long long data_checksum;
+	unsigned long long header_checksum;
 };
 
 // Windows Vista Thumbcache entry.
@@ -126,21 +130,21 @@ struct database_cache_entry_vista
 {
 	char magic_identifier[ 4 ];
 	unsigned int cache_entry_size;
-	long long entry_hash;
+	unsigned long long entry_hash;
 	wchar_t extension[ 4 ];
 	unsigned int filename_length;
 	unsigned int padding_size;
 	unsigned int data_size;
 	unsigned int unknown;
-	long long data_checksum;
-	long long header_checksum;
+	unsigned long long data_checksum;
+	unsigned long long header_checksum;
 };
 
 // Holds shared variables among database entries.
 struct shared_info
 {
 	wchar_t dbpath[ MAX_PATH ];			// Path to the database file.
-	unsigned int system;				// 0x14 = Windows Vista, 0x15 = Windows 7
+	unsigned int system;				// 0x14 = Windows Vista, 0x15 = Windows 7, 0x1A & 0x1C = Windows 8
 
 	unsigned long count;				// Number of directory entries.
 };
@@ -148,13 +152,16 @@ struct shared_info
 // This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
 struct fileinfo
 {
-	unsigned int offset;				// Offset in database.
+	unsigned int header_offset;			// Offset of header.
+	unsigned int data_offset;			// Offset of data.
 	unsigned int size;					// Size of file.
-	char extension;						// 0 = bmp, 1 = jpg, 2 = png
 	wchar_t *filename;					// Name of the database entry.
-	long long entry_hash;				// Entry hash
-	long long data_checksum;			// Data checksum
-	long long header_checksum;			// Header checksum
+	unsigned long long entry_hash;		// Entry hash
+	unsigned long long data_checksum;	// Data checksum
+	unsigned long long header_checksum;	// Header checksum
+	unsigned long long v_data_checksum;	// Verified data checksum
+	unsigned long long v_header_checksum;	// Verified header checksum
+	unsigned char flag;					// 1 = bmp, 2 = jpg, 4 = png, 8 = in tree, 16 = verified headers, 32 = bad header, 64 = bad data.
 
 	shared_info *si;					// Shared information between items in a database.
 };
@@ -187,12 +194,15 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
 
 LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
 unsigned __stdcall cleanup( void *pArguments );
 unsigned __stdcall read_database( void *pArguments );
 unsigned __stdcall remove_items( void *pArguments );
 unsigned __stdcall show_hide_items( void *pArguments );
+unsigned __stdcall verify_checksums( void *pArguments );
 unsigned __stdcall save_items( void *pArguments );
+unsigned __stdcall scan_files( void *pArguments );
 bool is_close( int a, int b );
 void update_menus( bool disable_all );
 
@@ -202,7 +212,11 @@ void update_menus( bool disable_all );
 extern HWND g_hWnd_main;			// Handle to our main window.
 extern HWND g_hWnd_image;			// Handle to our image window.
 extern HWND g_hWnd_prompt;			// Handle to our prompt window.
+extern HWND g_hWnd_scan;			// Handle to our scan window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
+extern HWND g_hWnd_hashing;			// Handle to the hashing edit control.
+extern HWND g_hWnd_static_hash;		// Handle to the static hash control.
+extern HWND g_hWnd_static_count;	// Handle to the static count control.
 
 extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
 extern HANDLE prompt_mutex;			// Blocks read_database() until the g_hWnd_prompt is destroyed.
@@ -215,6 +229,8 @@ extern HICON hIcon_png;				// Handle to the system's .png icon.
 
 extern HMENU g_hMenu;				// Handle to our menu bar.
 extern HMENU g_hMenuSub_context;	// Handle to our context menu.
+
+extern HCURSOR wait_cursor;			// Temporary cursor while processing entries.
 
 extern bool cancelled_prompt;		// User cancelled the prompt.
 extern unsigned int entry_begin;	// Beginning position to start reading.
@@ -237,8 +253,16 @@ extern float scale;					// Scale of the image.
 extern blank_entries_linked_list *g_be;	// A list to hold all of the blank entries.
 extern bool hide_blank_entries;		// Hide blank entries.
 
+// Scan variables
+extern wchar_t g_filepath[];		// Path to the files and folders to scan.
+extern wchar_t extension_filter[];	// A list of extensions to filter from a file scan.
+extern bool include_folders;		// Include folders in a file scan.
+extern bool show_details;			// Show details in the scan window.
+extern rbt_tree *fileinfo_tree;		// Red-black tree of fileinfo structures.
+
 // Thread variables
 extern bool kill_thread;			// Allow for a clean shutdown.
+extern bool kill_scan;				// Stop a file scan.
 
 extern bool in_thread;				// Flag to indicate that we're in a worker thread.
 extern bool skip_draw;				// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
