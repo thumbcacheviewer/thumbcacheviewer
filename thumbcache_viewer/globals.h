@@ -61,12 +61,11 @@
 #define WINDOWS_7		0x15
 #define WINDOWS_8		0x1A
 #define WINDOWS_8v2		0x1C
-
-#define MAX_ENTRIES		10240	// The maximum amount of entries we want to display. Anything above this will result in a user prompt. Should not be greater than UINT_MAX.
+#define WINDOWS_8v3		0x1E
 
 #define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
 
-#define WM_PROPAGATE		WM_APP		// Updates the prompt window.
+#define WM_PROPAGATE		WM_APP		// Updates the scan window.
 #define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
 #define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
 
@@ -77,8 +76,8 @@ struct database_header
 	unsigned int version;
 	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
 };
-
-// Found in everything but WINDOWS_8v2 databases.
+/*
+// Found in everything but WINDOWS_8v2/3 databases.
 struct database_header_entry_info
 {
 	unsigned int first_cache_entry;
@@ -95,6 +94,14 @@ struct database_header_entry_info_v2
 	unsigned int number_of_cache_entries;
 };
 
+// Found in WINDOWS_8v3 databases.
+struct database_header_entry_info_v3
+{
+	unsigned int unknown;
+	unsigned int first_cache_entry;
+	unsigned int available_cache_entry;
+};
+*/
 // Window 7 Thumbcache entry.
 struct database_cache_entry_7
 {
@@ -193,7 +200,6 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
 
-LRESULT CALLBACK PromptWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
 unsigned __stdcall cleanup( void *pArguments );
@@ -211,7 +217,6 @@ void update_menus( bool disable_all );
 // Object handles.
 extern HWND g_hWnd_main;			// Handle to our main window.
 extern HWND g_hWnd_image;			// Handle to our image window.
-extern HWND g_hWnd_prompt;			// Handle to our prompt window.
 extern HWND g_hWnd_scan;			// Handle to our scan window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
 extern HWND g_hWnd_hashing;			// Handle to the hashing edit control.
@@ -219,7 +224,6 @@ extern HWND g_hWnd_static_hash;		// Handle to the static hash control.
 extern HWND g_hWnd_static_count;	// Handle to the static count control.
 
 extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
-extern HANDLE prompt_mutex;			// Blocks read_database() until the g_hWnd_prompt is destroyed.
 
 extern HFONT hFont;					// Handle to the system's message font.
 
@@ -231,10 +235,6 @@ extern HMENU g_hMenu;				// Handle to our menu bar.
 extern HMENU g_hMenuSub_context;	// Handle to our context menu.
 
 extern HCURSOR wait_cursor;			// Temporary cursor while processing entries.
-
-extern bool cancelled_prompt;		// User cancelled the prompt.
-extern unsigned int entry_begin;	// Beginning position to start reading.
-extern unsigned int entry_end;		// Ending position to stop reading.
 
 // Window variables
 extern RECT last_dim;				// Keeps track of the image window's dimension before it gets minimized.

@@ -23,7 +23,6 @@
 // Object variables
 HWND g_hWnd_main = NULL;	// Handle to our main window.
 HWND g_hWnd_image = NULL;	// Handle to the image window.
-HWND g_hWnd_prompt = NULL;	// Handle to our prompt window.
 HWND g_hWnd_scan = NULL;	// Handle to our scan window.
 
 HFONT hFont = NULL;			// Handle to our font object.
@@ -90,15 +89,6 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		return 1;
 	}
 
-	wcex.lpfnWndProc    = PromptWndProc;
-	wcex.lpszClassName  = L"prompt";
-
-	if ( !RegisterClassEx( &wcex ) )
-	{
-		MessageBox( NULL, L"Call to RegisterClassEx failed!", PROGRAM_CAPTION, MB_ICONWARNING );
-		return 1;
-	}
-
 	wcex.lpfnWndProc    = ScanWndProc;
 	wcex.lpszClassName  = L"scan";
 
@@ -119,14 +109,6 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	g_hWnd_image = CreateWindow( L"image", PROGRAM_CAPTION, WS_OVERLAPPEDWINDOW, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_HEIGHT, MIN_HEIGHT, NULL, NULL, NULL, NULL );
 
 	if ( !g_hWnd_image )
-	{
-		MessageBox( NULL, L"Call to CreateWindow failed!", PROGRAM_CAPTION, MB_ICONWARNING );
-		return 1;
-	}
-
-	g_hWnd_prompt = CreateWindowEx( WS_EX_DLGMODALFRAME, L"prompt", L"Too Many Entries", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - 250 ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - 145 ) / 2 ), 250, 145, g_hWnd_main, NULL, NULL, NULL );
-
-	if ( !g_hWnd_prompt )
 	{
 		MessageBox( NULL, L"Call to CreateWindow failed!", PROGRAM_CAPTION, MB_ICONWARNING );
 		return 1;
