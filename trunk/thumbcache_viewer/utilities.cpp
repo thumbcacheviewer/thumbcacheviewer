@@ -23,12 +23,6 @@
 #define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
 #define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 
-HANDLE prompt_mutex = NULL;
-
-bool cancelled_prompt = false;	// User cancelled the prompt.
-unsigned int entry_begin = 0;	// Beginning position to start reading.
-unsigned int entry_end = 0;		// Ending position to stop reading.
-
 HANDLE shutdown_mutex = NULL;	// Blocks shutdown while a worker thread is active.
 bool kill_thread = false;		// Allow for a clean shutdown.
 
@@ -326,15 +320,15 @@ unsigned __stdcall scan_files( void *pArguments )
 
 bool scan_memory( HANDLE hFile, unsigned int &offset )
 {
-	// Allocate a 100 kilobyte chunk of memory to scan. This value is arbitrary.
-	char *buf = ( char * )malloc( sizeof( char ) * 102400 );
+	// Allocate a 32 kilobyte chunk of memory to scan. This value is arbitrary.
+	char *buf = ( char * )malloc( sizeof( char ) * 32768 );
 	char *scan = NULL;
 	DWORD read = 0;
 
 	while ( true )
 	{
 		// Begin reading through the database.
-		ReadFile( hFile, buf, sizeof( char ) * 102400, &read, NULL );
+		ReadFile( hFile, buf, sizeof( char ) * 32768, &read, NULL );
 		if ( read <= 4 )
 		{
 			free( buf );
@@ -674,7 +668,7 @@ unsigned __stdcall verify_checksums( void *pArguments )
 		}
 
 		// Get the header size of the current entry.
-		header_size = ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 ? sizeof( database_cache_entry_7 ) : ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v2 ? sizeof( database_cache_entry_8 ) : sizeof( database_cache_entry_vista ) ) ) - sizeof( unsigned long long );
+		header_size = ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 ? sizeof( database_cache_entry_7 ) : ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v2 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v3 ? sizeof( database_cache_entry_8 ) : sizeof( database_cache_entry_vista ) ) ) - sizeof( unsigned long long );
 
 		// Attempt to open a file for reading.
 		HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -1023,67 +1017,15 @@ unsigned __stdcall read_database( void *pArguments )
 				continue;
 			}
 
-			unsigned int number_of_cache_entries = 0;
-
-			// WINDOWS_8v2 has an additional 4 bytes before the entry information.
-			if ( dh.version != WINDOWS_8v2 )
-			{
-				database_header_entry_info dhei = { 0 };
-				ReadFile( hFile, &dhei, sizeof( database_header_entry_info ), &read, NULL );
-				number_of_cache_entries = dhei.number_of_cache_entries;
-			}
-			else
-			{
-				database_header_entry_info_v2 dhei = { 0 };
-				ReadFile( hFile, &dhei, sizeof( database_header_entry_info_v2 ), &read, NULL );
-				number_of_cache_entries = dhei.number_of_cache_entries;
-			}
-
 			// Set the file pointer to the first possible cache entry. (Should be at an offset equal to the size of the header)
 			// current_position will keep track our our file pointer position before setting the file pointer. (ReadFile sets it as well)
 			unsigned int current_position = ( dh.version != WINDOWS_8v2 ? 24 : 28 );
-
-			entry_begin = 1;						// By default, we'll start with the first entry.
-			entry_end = number_of_cache_entries;	// By default, we'll end with the last entry.
-
-			// If we've hit our display limit, then prompt the user for a range of entries.
-			if ( number_of_cache_entries > MAX_ENTRIES )
-			{
-				// This mutex will be released when the user selects a range of entries.
-				prompt_mutex = CreateSemaphore( NULL, 0, 1, NULL );
-
-				cancelled_prompt = false;	// Assume they haven't cancelled the prompt.
-				SendMessage( g_hWnd_prompt, WM_PROPAGATE, number_of_cache_entries, 0 );
-
-				// Wait for the user to select the range of entries.
-				WaitForSingleObject( prompt_mutex, INFINITE );
-				CloseHandle( prompt_mutex );
-				prompt_mutex = NULL;
-
-				// If the user cancelled the prompt, then exit the thread. We'll assume they don't want to load the database.
-				if ( cancelled_prompt == true )
-				{
-					CloseHandle( hFile );
-					free( filepath );
-
-					continue;
-				}
-			}
-
-			// If the user selected an ending value that's larger than the number of entries, then set it to the number of entries instead.
-			if ( entry_end > number_of_cache_entries )
-			{
-				entry_end = number_of_cache_entries;
-			}
-
-			// Determine whether we're going to offset the entries we list.
-			bool offset_beginning = ( entry_begin > 1 ? true : false );
 
 			bool next_file = false;	// Go to the next database file.
 			unsigned int header_offset = 0;
 
 			// Go through our database and attempt to extract each cache entry.
-			for ( unsigned int i = 1; i <= entry_end; ++i )
+			while ( true )
 			{
 				// Stop processing and exit the thread.
 				if ( kill_thread == true )
@@ -1129,19 +1071,13 @@ unsigned __stdcall read_database( void *pArguments )
 					{
 						free( database_cache_entry );
 
-						wchar_t msg[ 95 ] = { 0 };
-						swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
-						if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
-						{
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+						// Walk back to the end of the last cache entry.
+						current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								--i;
-								continue;
-							}
+						// If we found the beginning of the entry, attempt to read it again.
+						if ( scan_memory( hFile, current_position ) == true )
+						{
+							continue;
 						}
 
 						free( filepath );
@@ -1168,19 +1104,13 @@ unsigned __stdcall read_database( void *pArguments )
 					{
 						free( database_cache_entry );
 
-						wchar_t msg[ 95 ] = { 0 };
-						swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
-						if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
-						{
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+						// Walk back to the end of the last cache entry.
+						current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								--i;
-								continue;
-							}
+						// If we found the beginning of the entry, attempt to read it again.
+						if ( scan_memory( hFile, current_position ) == true )
+						{
+							continue;
 						}
 
 						free( filepath );
@@ -1189,7 +1119,7 @@ unsigned __stdcall read_database( void *pArguments )
 						break;
 					}
 				}
-				else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 )
+				else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 )
 				{
 					database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
 					ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
@@ -1208,19 +1138,13 @@ unsigned __stdcall read_database( void *pArguments )
 					{
 						free( database_cache_entry );
 
-						wchar_t msg[ 95 ] = { 0 };
-						swprintf_s( msg, 95, L"Invalid cache entry located at %lu bytes.\r\n\r\nDo you want to scan for remaining entries?", current_position );
-						if ( MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING | MB_YESNO ) == IDYES )
-						{
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position - read, NULL, FILE_BEGIN );
+						// Walk back to the end of the last cache entry.
+						current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								--i;
-								continue;
-							}
+						// If we found the beginning of the entry, attempt to read it again.
+						if ( scan_memory( hFile, current_position ) == true )
+						{
+							continue;
 						}
 
 						free( filepath );
@@ -1239,39 +1163,26 @@ unsigned __stdcall read_database( void *pArguments )
 					break;
 				}
 
+				// I think this signifies the end of a valid database and everything beyond this is data that's been overwritten.
+				if ( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) ) == 0 )
+				{
+					// Skip the header of this entry. If the next position is invalid (which it probably will be), we'll end up scanning.
+					current_position += read;
+					// Free each database entry that we've skipped over.
+					free( database_cache_entry );
+
+					continue;
+				}
+
 				header_offset = current_position;
 
 				// Size of the cache entry.
-				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );
+				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );
 
 				current_position += cache_entry_size;
 
-				// If we've selected a range of values, then we're going to offset the file pointer.
-				if ( offset_beginning == true )
-				{
-					// If we've reached the beginning of the range, then we're no longer going to offset the file pointer.
-					if ( ( i + 1 ) == entry_begin )
-					{
-						offset_beginning = false;
-					}
-
-					// Free each database entry that we've skipped over.
-					free( database_cache_entry );
-
-					continue;
-				}
-				
 				// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
-				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
-
-				// Skip blank filenames.
-				if ( filename_length == 0 )
-				{
-					// Free each database entry that we've skipped over.
-					free( database_cache_entry );
-
-					continue;
-				}
+				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
 
 				// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
 				unsigned int filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * SHRT_MAX ) );
@@ -1317,7 +1228,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Padding before the data entry.
-				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
+				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
 
 				// This will set our file pointer to the beginning of the data entry.
 				file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
@@ -1336,7 +1247,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Size of our image.
-				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
+				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
 
 				// Create a new info structure to send to the listview item's lParam value.
 				fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
@@ -1345,9 +1256,9 @@ unsigned __stdcall read_database( void *pArguments )
 				fi->data_offset = file_position;
 				fi->size = data_size;
 
-				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );
-				fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
-				fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
+				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );
+				fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
+				fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
 
 				// Read any data that exists and get its file extension.
 				if ( data_size != 0 )
