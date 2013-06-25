@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2012 Eric Kutcher
+    Copyright (C) 2011-2013 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,6 +30,8 @@ HFONT hFont = NULL;			// Handle to our font object.
 HICON hIcon_bmp = NULL;		// Handle to the system's .bmp icon.
 HICON hIcon_jpg = NULL;		// Handle to the system's .jpg icon.
 HICON hIcon_png = NULL;		// Handle to the system's .png icon.
+
+char cmd_line = 0;			// Show the main window and message prompts. -1 = Do nothing, 0 = GUI only, 1 = Command Line and GUI, 2 = Command Line and no GUI (save only).
 
 int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
@@ -122,7 +124,84 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		return 1;
 	}
 
-	ShowWindow( g_hWnd_main, SW_SHOW );
+	// See if we have any command-line parameters
+	if ( lpCmdLine != NULL && lpCmdLine[ 0 ] != NULL )
+	{
+		// Count the number of parameters and split them into an array.
+		int argCount = 0;
+		LPWSTR *szArgList = CommandLineToArgvW( GetCommandLine(), &argCount );
+		if ( szArgList != NULL )
+		{
+			// The first parameter is the path to the executable. Ignore it.
+			if ( argCount > 1 )
+			{
+				// Allocate enough space to hold each parameter. They should all be full paths.
+				pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+				pi->offset = 0;
+				pi->output_path = NULL;
+				pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * ( argCount - 1 ) ) + 1 ) );
+				wmemset( pi->filepath, 0, ( ( MAX_PATH * ( argCount - 1 ) ) + 1 ) );
+
+				cmd_line = 1;	// Open the database(s) from the command-line.
+
+				int filepath_offset = 0;
+				for ( int i = 1; i < argCount; ++i )
+				{
+					int filepath_length = wcslen( szArgList[ i ] );
+
+					// See if it's an output parameter.
+					if ( filepath_length > 1 && szArgList[ i ][ 0 ] == L'-' && ( szArgList[ i ][ 1 ] == L'o' || szArgList[ i ][ 1 ] == L'O' ) )
+					{
+						// See if the next parameter exists. We'll assume it's the output directory.
+						if ( i + 1 < argCount )
+						{
+							pi->output_path = _wcsdup( szArgList[ ++i ] );
+
+							cmd_line = 2;	// Save the database(s) from the command-line. Do not display the main window or any prompts.
+						}
+					}
+					else if ( filepath_length > 1 && szArgList[ i ][ 0 ] == L'-' && ( szArgList[ i ][ 1 ] == L'z' || szArgList[ i ][ 1 ] == L'Z' ) )
+					{
+						hide_blank_entries = true;
+
+						// Put a check next to the menu item. g_hMenu is created in g_hWnd_main.
+						CheckMenuItem( g_hMenu, MENU_HIDE_BLANK, MF_CHECKED );
+					}
+					else	// Copy the paths into the NULL separated filepath.
+					{
+						wmemcpy_s( pi->filepath + filepath_offset, ( ( MAX_PATH * ( argCount - 1 ) ) + 1 ) - filepath_offset, szArgList[ i ], filepath_length + 1 );
+						filepath_offset += ( filepath_length + 1 );
+					}
+				}
+
+				// Only read the database if there's a file to open.
+				if ( pi->filepath[ 0 ] != NULL )
+				{
+					// filepath will be freed in the thread.
+					CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
+				}
+				else
+				{
+					// Cleanup our parameters structure and exit the program.
+					free( pi->output_path );
+					free( pi->filepath );
+					free( pi );
+
+					cmd_line = -1;
+
+					SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
+				}
+			}
+
+			// Free the parameter list.
+			LocalFree( szArgList );
+		}
+	}
+
+	if ( cmd_line == 0 || cmd_line == 1 )
+	{
+		ShowWindow( g_hWnd_main, SW_SHOW );
+	}
 
 	// Main message loop:
 	MSG msg;

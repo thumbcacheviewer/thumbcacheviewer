@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2012 Eric Kutcher
+    Copyright (C) 2011-2013 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -731,6 +731,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						if( GetOpenFileName( &ofn ) )
 						{
 							pi->offset = ofn.nFileOffset;
+							pi->output_path = NULL;
+							cmd_line = 0;
 
 							// filepath will be freed in the thread.
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
@@ -763,6 +765,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						if ( lpiidl )
 						{
 							save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_items thread.
+							save_type->filepath = NULL;
 							save_type->lpiidl = lpiidl;
 							save_type->save_all = ( LOWORD( wParam ) == MENU_SAVE_ALL ? true : false );
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
@@ -824,7 +827,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBox( hWnd, L"Thumbcache Viewer is made free under the GPLv3 license.\n\nCopyright \xA9 2011-2012 Eric Kutcher", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBox( hWnd, L"Thumbcache Viewer is made free under the GPLv3 license.\n\nCopyright \xA9 2011-2013 Eric Kutcher", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1515,6 +1518,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		{
 			// Prevent the possibility of running additional processes.
 			EnableWindow( hWnd, FALSE );
+			ShowWindow( hWnd, SW_HIDE );
+			ShowWindow( g_hWnd_image, SW_HIDE );
 
 			// If we're in a secondary thread, then kill it (cleanly) and wait for it to exit.
 			if ( in_thread == true )
@@ -1593,6 +1598,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// Clean up our fileinfo tree.
 			rbt_delete( fileinfo_tree );
 
+			// Since this isn't owned by a window, we need to destroy it.
+			DestroyMenu( g_hMenuSub_context );
+
 			PostQuitMessage( 0 );
 			return 0;
 		}
@@ -1619,6 +1627,8 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 			pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
 			pi->filepath = NULL;
 			pi->offset = 0;
+			pi->output_path = NULL;
+			cmd_line = 0;
 
 			int file_offset = 0;	// Keeps track of the last file in filepath.
 

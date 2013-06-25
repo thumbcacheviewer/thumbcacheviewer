@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2012 Eric Kutcher
+    Copyright (C) 2011-2013 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -810,9 +810,16 @@ unsigned __stdcall save_items( void *pArguments )
 	save_param *save_type = ( save_param * )pArguments;
 
 	wchar_t save_directory[ MAX_PATH ] = { 0 };
-	// Get the directory path from the id list.
-	SHGetPathFromIDList( save_type->lpiidl, save_directory );
-	CoTaskMemFree( save_type->lpiidl );
+	if ( save_type->lpiidl != NULL )
+	{
+		// Get the directory path from the id list.
+		SHGetPathFromIDList( save_type->lpiidl, save_directory );
+		CoTaskMemFree( save_type->lpiidl );
+	}
+	else if ( save_type->filepath != NULL )
+	{
+		wcsncpy_s( save_directory, MAX_PATH, save_type->filepath, MAX_PATH - 1 );
+	}
 	
 	// Depending on what was selected, get the number of items we'll be saving.
 	int save_items = ( save_type->save_all == true ? SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) : SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) );
@@ -914,14 +921,15 @@ unsigned __stdcall save_items( void *pArguments )
 				// See if the path was too long.
 				if ( GetLastError() == ERROR_PATH_NOT_FOUND )
 				{
-					MessageBox( g_hWnd_main, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					if ( cmd_line != 2 ){ MessageBox( g_hWnd_main, L"One or more files could not be saved. Please check the filename and path.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING ); }
 				}
 			}
 			// Free our buffer.
 			free( save_image );
 		}
 	}
-
+	
+	free( save_type->filepath );
 	free( save_type );
 
 	update_menus( false );									// Enable the appropriate menu items.
@@ -934,6 +942,11 @@ unsigned __stdcall save_items( void *pArguments )
 	if ( shutdown_mutex != NULL )
 	{
 		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+	else if ( cmd_line == 2 )	// Exit the program if we're done saving.
+	{
+		// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
+		SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
 	}
 
 	in_thread = false;
@@ -965,7 +978,7 @@ unsigned __stdcall read_database( void *pArguments )
 
 	int filepath_length = wcslen( pi->filepath ) + 1;	// Include NULL character.
 	
-	bool construct_filepath = ( filepath_length > pi->offset ? false : true );
+	bool construct_filepath = ( filepath_length > pi->offset && cmd_line == 0 ? false : true );
 
 	wchar_t *filepath = NULL;
 
@@ -981,10 +994,18 @@ unsigned __stdcall read_database( void *pArguments )
 		// Construct the filepath for each file.
 		if ( construct_filepath == true )
 		{
-			fname_length = wcslen( fname ) + 1;	// Include '\' character
+			fname_length = wcslen( fname ) + 1;	// Include '\' character or NULL character
 
-			filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( filepath_length + fname_length ) );
-			swprintf_s( filepath, filepath_length + fname_length, L"%s\\%s", pi->filepath, fname );
+			if ( cmd_line != 0 )
+			{
+				filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * fname_length );
+				wcscpy_s( filepath, fname_length, fname );
+			}
+			else
+			{
+				filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( filepath_length + fname_length ) );
+				swprintf_s( filepath, filepath_length + fname_length, L"%s\\%s", pi->filepath, fname );
+			}
 
 			// Move to the next file name.
 			fname += fname_length;
@@ -1012,7 +1033,7 @@ unsigned __stdcall read_database( void *pArguments )
 				CloseHandle( hFile );
 				free( filepath );
 
-				MessageBox( g_hWnd_main, L"The file is not a thumbcache database.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+				if ( cmd_line != 2 ){ MessageBox( g_hWnd_main, L"The file is not a thumbcache database.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING ); }
 
 				continue;
 			}
@@ -1042,9 +1063,12 @@ unsigned __stdcall read_database( void *pArguments )
 				{
 					free( filepath );
 
-					wchar_t msg[ 21 ] = { 0 };
-					swprintf_s( msg, 21, L"Invalid cache entry." );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					if ( cmd_line != 2 )
+					{
+						wchar_t msg[ 21 ] = { 0 };
+						swprintf_s( msg, 21, L"Invalid cache entry." );
+						MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					}
 
 					next_file = true;
 					break;
@@ -1157,7 +1181,7 @@ unsigned __stdcall read_database( void *pArguments )
 				{
 					free( filepath );
 
-					MessageBox( g_hWnd_main, L"The file is not supported by this program.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					if ( cmd_line != 2 ){ MessageBox( g_hWnd_main, L"The file is not supported by this program.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING ); }
 
 					next_file = true;
 					break;
@@ -1197,9 +1221,12 @@ unsigned __stdcall read_database( void *pArguments )
 					free( database_cache_entry );
 					free( filepath );
 					
-					wchar_t msg[ 49 ] = { 0 };
-					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					if ( cmd_line != 2 )
+					{
+						wchar_t msg[ 49 ] = { 0 };
+						swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
+						MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					}
 
 					next_file = true;
 					break;
@@ -1218,9 +1245,12 @@ unsigned __stdcall read_database( void *pArguments )
 						free( database_cache_entry );
 						free( filepath );
 
-						wchar_t msg[ 49 ] = { 0 };
-						swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-						MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+						if ( cmd_line != 2 )
+						{
+							wchar_t msg[ 49 ] = { 0 };
+							swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
+							MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+						}
 						
 						next_file = true;
 						break;
@@ -1238,9 +1268,12 @@ unsigned __stdcall read_database( void *pArguments )
 					free( database_cache_entry );
 					free( filepath );
 
-					wchar_t msg[ 49 ] = { 0 };
-					swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-					MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					if ( cmd_line != 2 )
+					{
+						wchar_t msg[ 49 ] = { 0 };
+						swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
+						MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+					}
 
 					next_file = true;
 					break;
@@ -1274,9 +1307,12 @@ unsigned __stdcall read_database( void *pArguments )
 						free( database_cache_entry );
 						free( filepath );
 
-						wchar_t msg[ 49 ] = { 0 };
-						swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
-						MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+						if ( cmd_line != 2 )
+						{
+							wchar_t msg[ 49 ] = { 0 };
+							swprintf_s( msg, 49, L"Invalid cache entry located at %lu bytes.", current_position );
+							MessageBox( g_hWnd_main, msg, PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+						}
 
 						next_file = true;
 						break;
@@ -1372,13 +1408,35 @@ unsigned __stdcall read_database( void *pArguments )
 		else
 		{
 			// If this occurs, then there's something wrong with the user's system.
-			MessageBox( g_hWnd_main, L"The database file failed to open.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING );
+			if ( cmd_line != 2 ){ MessageBox( g_hWnd_main, L"The database file failed to open.", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONWARNING ); }
 		}
 
 		// Free the old filepath.
 		free( filepath );
 	}
 	while ( construct_filepath == true && *fname != L'\0' );
+
+	// Save the files if the user specified an output directory through the command-line.
+	if ( pi->output_path != NULL )
+	{
+		wchar_t output_path[ MAX_PATH ] = { 0 };
+		// Create and set the directory that we'll be outputting files to.
+		if ( GetFileAttributes( pi->output_path ) == INVALID_FILE_ATTRIBUTES )
+		{
+			CreateDirectory( pi->output_path, NULL );
+		}
+
+		SetCurrentDirectory( pi->output_path );			// Set the path (relative or full)
+		GetCurrentDirectory( MAX_PATH, output_path );	// Get the full path
+
+		save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_items thread.
+		save_type->filepath = _wcsdup( output_path );
+		save_type->lpiidl = NULL;
+		save_type->save_all = true;
+		CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
+
+		free( pi->output_path );
+	}
 
 	// Free the path info.
 	free( pi->filepath );
