@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2012 Eric Kutcher
+    Copyright (C) 2011-2013 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -465,8 +465,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				BitBlt( hDC, 0, 0, rc.right, rc.bottom, hdcMem, 0, 0, SRCCOPY );
 				DeleteDC( hdcMem );
 			}
-			
-			DeleteDC( hDC );
+
 			EndPaint( hWnd, &ps );
 
 			return 0;
@@ -622,6 +621,10 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 		case WM_CLOSE:
 		{
+			// We're no longer attached to the main window if we're closed.
+			is_attached = false;
+			skip_main = false;
+
 			// Hide the window if we lose focus.
 			ShowWindow( hWnd, SW_HIDE );
 			return 0;

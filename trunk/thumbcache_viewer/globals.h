@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2012 Eric Kutcher
+    Copyright (C) 2011-2013 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -63,7 +63,7 @@
 #define WINDOWS_8v2		0x1C
 #define WINDOWS_8v3		0x1E
 
-#define SNAP_WIDTH		10;		// The minimum distance at which our windows will attach together.
+#define SNAP_WIDTH		10		// The minimum distance at which our windows will attach together.
 
 #define WM_PROPAGATE		WM_APP		// Updates the scan window.
 #define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
@@ -185,11 +185,13 @@ struct pathinfo
 {
 	wchar_t *filepath;			// Path to the file/folder
 	unsigned short offset;		// Offset to the first file.
+	wchar_t *output_path;		// If the user wants to save files.
 };
 
 // Save To structure.
 struct save_param
 {
+	wchar_t *filepath;		// Save directory.
 	LPITEMIDLIST lpiidl;	// BrowseForFolder variable when saving files.
 	bool save_all;			// Save All = true, Save Selected = false.
 };
@@ -241,6 +243,8 @@ extern RECT last_dim;				// Keeps track of the image window's dimension before i
 
 extern bool is_attached;			// Toggled when our windows are attached
 extern bool skip_main;				// Prevents the main window from moving the image window if it is about to attach.
+
+extern char cmd_line;				// Show the main window and message prompts.
 
 // Image variables
 extern Gdiplus::Image *gdi_image;	// GDI+ image object. We need it to handle .png and .jpg images specifically.
