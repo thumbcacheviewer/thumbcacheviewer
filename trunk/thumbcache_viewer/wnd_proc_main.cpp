@@ -1417,6 +1417,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 8" );
 							}
+							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8_1 )
+							{
+								wcscpy_s( buf, MAX_PATH, L"Windows 8.1" );
+							}
 							else
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows Vista" );

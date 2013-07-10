@@ -61,8 +61,8 @@ static void delete_tree( rbt_tree *tree, node_type *p )
 		return;
 	}
 
-	delete_tree( tree, p->left);
-	delete_tree( tree, p->right);
+	delete_tree( tree, p->left );
+	delete_tree( tree, p->right );
 	free( p );
 }
 
@@ -418,7 +418,6 @@ rbt_status rbt_remove( rbt_tree *tree, rbt_iterator *i )
 		z->key = y->key;
 		z->val = y->val;
 	}
-
 
 	if ( y->color == BLACK )
 	{
