@@ -668,7 +668,7 @@ unsigned __stdcall verify_checksums( void *pArguments )
 		}
 
 		// Get the header size of the current entry.
-		header_size = ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 ? sizeof( database_cache_entry_7 ) : ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v2 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v3 ? sizeof( database_cache_entry_8 ) : sizeof( database_cache_entry_vista ) ) ) - sizeof( unsigned long long );
+		header_size = ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 ? sizeof( database_cache_entry_7 ) : ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_VISTA ? sizeof( database_cache_entry_vista ) : sizeof( database_cache_entry_8 ) ) ) - sizeof( unsigned long long );
 
 		// Attempt to open a file for reading.
 		HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -1143,7 +1143,7 @@ unsigned __stdcall read_database( void *pArguments )
 						break;
 					}
 				}
-				else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 )
+				else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
 				{
 					database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
 					ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
@@ -1188,7 +1188,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// I think this signifies the end of a valid database and everything beyond this is data that's been overwritten.
-				if ( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) ) == 0 )
+				if ( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ) == 0 )
 				{
 					// Skip the header of this entry. If the next position is invalid (which it probably will be), we'll end up scanning.
 					current_position += read;
@@ -1201,12 +1201,12 @@ unsigned __stdcall read_database( void *pArguments )
 				header_offset = current_position;
 
 				// Size of the cache entry.
-				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size ) );
+				unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size ) );
 
 				current_position += cache_entry_size;
 
 				// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
-				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->filename_length : ( ( database_cache_entry_vista * )database_cache_entry )->filename_length ) );
+				unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->filename_length : ( ( database_cache_entry_8 * )database_cache_entry )->filename_length ) );
 
 				// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
 				unsigned int filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * SHRT_MAX ) );
@@ -1258,7 +1258,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Padding before the data entry.
-				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->padding_size : ( ( database_cache_entry_vista * )database_cache_entry )->padding_size ) );
+				unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->padding_size : ( ( database_cache_entry_8 * )database_cache_entry )->padding_size ) );
 
 				// This will set our file pointer to the beginning of the data entry.
 				file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
@@ -1280,7 +1280,7 @@ unsigned __stdcall read_database( void *pArguments )
 				}
 
 				// Size of our image.
-				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_size : ( ( database_cache_entry_vista * )database_cache_entry )->data_size ) );
+				unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_size : ( ( database_cache_entry_8 * )database_cache_entry )->data_size ) );
 
 				// Create a new info structure to send to the listview item's lParam value.
 				fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
@@ -1289,9 +1289,9 @@ unsigned __stdcall read_database( void *pArguments )
 				fi->data_offset = file_position;
 				fi->size = data_size;
 
-				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash : ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash ) );
-				fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum ) );
-				fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum : ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum ) );
+				fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) );
+				fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum ) );
+				fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum ) );
 
 				// Read any data that exists and get its file extension.
 				if ( data_size != 0 )
