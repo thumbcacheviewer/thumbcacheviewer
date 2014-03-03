@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2013 Eric Kutcher
+    Copyright (C) 2011-2014 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
