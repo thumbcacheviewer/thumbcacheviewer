@@ -19,7 +19,7 @@
 #include "globals.h"
 #include <stdio.h>
 
-#define NUM_COLUMNS 9
+#define NUM_COLUMNS 11
 
 WNDPROC ListViewProc = NULL;		// Subclassed listview window.
 WNDPROC EditProc = NULL;			// Subclassed listview edit window.
@@ -45,8 +45,10 @@ RECT current_edit_pos = { 0 };		// Current position of the listview edit control
 
 bool hide_blank_entries = false;	// Toggled from the main menu. Hides the blank (0 byte) entries.
 
-bool is_kbytes_size = true;			// Toggle the size text.
-bool is_kbytes_offset = true;		// Toggle the database location text.
+bool is_kbytes_c_offset = true;		// Toggle the cache entry offset text.
+bool is_kbytes_c_size = true;		// Toggle the cache entry size text.
+bool is_kbytes_d_offset = true;		// Toggle the data offset text.
+bool is_kbytes_d_size = true;		// Toggle the data size text.
 bool is_dc_lower = true;			// Toggle the data checksum text
 bool is_hc_lower = true;			// Toggle the header checksum text.
 bool is_eh_lower = true;			// Toggle the entry hash text.
@@ -78,6 +80,7 @@ void update_menus( bool disable_all )
 		EnableMenuItem( g_hMenu, MENU_OPEN, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_SAVE_SEL, MF_DISABLED );
+		EnableMenuItem( g_hMenu, MENU_EXPORT, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_REMOVE_SEL, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_SELECT_ALL, MF_DISABLED );
 		EnableMenuItem( g_hMenu, MENU_HIDE_BLANK, MF_DISABLED );
@@ -97,12 +100,14 @@ void update_menus( bool disable_all )
 			EnableMenuItem( g_hMenu, MENU_CHECKSUMS, MF_ENABLED );
 			EnableMenuItem( g_hMenu, MENU_SCAN, MF_ENABLED );
 			EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_ENABLED );
+			EnableMenuItem( g_hMenu, MENU_EXPORT, MF_ENABLED );
 		}
 		else
 		{
 			EnableMenuItem( g_hMenu, MENU_CHECKSUMS, MF_DISABLED );
 			EnableMenuItem( g_hMenu, MENU_SCAN, MF_DISABLED );
 			EnableMenuItem( g_hMenu, MENU_SAVE_ALL, MF_DISABLED );
+			EnableMenuItem( g_hMenu, MENU_EXPORT, MF_DISABLED );
 		}
 
 		if ( sel_count > 0 )
@@ -141,162 +146,108 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
 	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
 
+	unsigned char index = 0;
+
 	// We added NUM_COLUMNS to the lParamSort value in order to distinguish between items we want to sort up, and items we want to sort down.
 	// Saves us from having to pass some arbitrary struct pointer.
 	if ( lParamSort >= NUM_COLUMNS )	// Up
 	{
-		switch ( lParamSort % NUM_COLUMNS )
-		{
-			case 1:
-			{
-				return _wcsicmp( fi1->filename, fi2->filename );
-			}
-			break;
-
-			case 2:
-			{
-				return ( fi1->size > fi2->size );
-			}
-			break;
-
-			case 3:
-			{
-				return ( fi1->data_offset > fi2->data_offset );
-			}
-			break;
-
-			case 4:
-			{
-				if ( fi1->v_data_checksum != fi1->data_checksum && fi2->v_data_checksum == fi2->data_checksum )
-				{
-					return 0;
-				}
-				else if ( fi1->v_data_checksum == fi1->data_checksum && fi2->v_data_checksum != fi2->data_checksum )
-				{
-					return 1;
-				}
-
-				return ( fi1->data_checksum > fi2->data_checksum );
-			}
-			break;
-
-			case 5:
-			{
-				if ( fi1->v_header_checksum != fi1->header_checksum && fi2->v_header_checksum == fi2->header_checksum )
-				{
-					return 0;
-				}
-				else if ( fi1->v_header_checksum == fi1->header_checksum && fi2->v_header_checksum != fi2->header_checksum )
-				{
-					return 1;
-				}
-
-				return ( fi1->header_checksum > fi2->header_checksum );
-			}
-			break;
-
-			case 6:
-			{
-				return ( fi1->entry_hash > fi2->entry_hash );
-			}
-			break;
-
-			case 7:
-			{
-				return ( fi1->si->system < fi2->si->system );	// 7 before Vista when sorting up.
-			}
-			break;
-
-			case 8:
-			{
-				return _wcsicmp( fi1->si->dbpath, fi2->si->dbpath );
-			}
-			break;
-
-			default:
-			{
-				return 0;
-			}
-			break;
-		}	
+		index = ( unsigned char )( lParamSort % NUM_COLUMNS );
 	}
-	else	// Down
+	else
 	{
-		switch ( lParamSort )
+		index = ( unsigned char )lParamSort;
+
+		fi1 = ( ( fileinfo * )lParam2 );
+		fi2 = ( ( fileinfo * )lParam1 );
+	}
+		
+	switch ( index )
+	{
+		case 1:
 		{
-			case 1:
-			{
-				return _wcsicmp( fi2->filename, fi1->filename );
-			}
-			break;
+			return _wcsicmp( fi1->filename, fi2->filename );
+		}
+		break;
 
-			case 2:
-			{
-				return ( fi2->size > fi1->size );
-			}
-			break;
+		case 2:
+		{
+			return ( fi1->header_offset > fi2->header_offset );
+		}
+		break;
 
-			case 3:
-			{
-				return ( fi2->data_offset > fi1->data_offset );
-			}
-			break;
+		case 3:
+		{
+			return ( ( fi1->size + ( fi1->data_offset - fi1->header_offset ) ) > ( fi2->size + ( fi2->data_offset - fi2->header_offset ) ) );
+		}
+		break;
 
-			case 4:
-			{
-				if ( fi1->v_data_checksum != fi1->data_checksum && fi2->v_data_checksum == fi2->data_checksum )
-				{
-					return 1;
-				}
-				else if ( fi1->v_data_checksum == fi1->data_checksum && fi2->v_data_checksum != fi2->data_checksum )
-				{
-					return 0;
-				}
+		case 4:
+		{
+			return ( fi1->data_offset > fi2->data_offset );
+		}
+		break;
 
-				return ( fi2->data_checksum > fi1->data_checksum );
-			}
-			break;
+		case 5:
+		{
+			return ( fi1->size > fi2->size );
+		}
+		break;
 
-			case 5:
-			{
-				if ( fi1->v_header_checksum != fi1->header_checksum && fi2->v_header_checksum == fi2->header_checksum )
-				{
-					return 1;
-				}
-				else if ( fi1->v_header_checksum == fi1->header_checksum && fi2->v_header_checksum != fi2->header_checksum )
-				{
-					return 0;
-				}
-
-				return ( fi2->header_checksum > fi1->header_checksum );
-			}
-			break;
-
-			case 6:
-			{
-				return ( fi2->entry_hash > fi1->entry_hash );
-			}
-			break;
-
-			case 7:
-			{
-				return ( fi2->si->system < fi1->si->system ); // Vista before 7 when sorting down.
-			}
-			break;
-
-			case 8:
-			{
-				return _wcsicmp( fi2->si->dbpath, fi1->si->dbpath );
-			}
-			break;
-
-			default:
+		case 6:
+		{
+			if ( fi1->v_data_checksum != fi1->data_checksum && fi2->v_data_checksum == fi2->data_checksum )
 			{
 				return 0;
 			}
-			break;
+			else if ( fi1->v_data_checksum == fi1->data_checksum && fi2->v_data_checksum != fi2->data_checksum )
+			{
+				return 1;
+			}
+
+			return ( fi1->data_checksum > fi2->data_checksum );
 		}
-	}
+		break;
+
+		case 7:
+		{
+			if ( fi1->v_header_checksum != fi1->header_checksum && fi2->v_header_checksum == fi2->header_checksum )
+			{
+				return 0;
+			}
+			else if ( fi1->v_header_checksum == fi1->header_checksum && fi2->v_header_checksum != fi2->header_checksum )
+			{
+				return 1;
+			}
+
+			return ( fi1->header_checksum > fi2->header_checksum );
+		}
+		break;
+
+		case 8:
+		{
+			return ( fi1->entry_hash > fi2->entry_hash );
+		}
+		break;
+
+		case 9:
+		{
+			return ( fi1->si->system < fi2->si->system );	// 7 before Vista when sorting up.
+		}
+		break;
+
+		case 10:
+		{
+			return _wcsicmp( fi1->si->dbpath, fi2->si->dbpath );
+		}
+		break;
+
+		default:
+		{
+			return 0;
+		}
+		break;
+	}	
 }
 
 LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -342,11 +293,20 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			InsertMenuItem( hMenuSub_file, 4, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
+			mii.dwTypeData = L"Export to CSV...\tCtrl+E";
+			mii.cch = 23;
+			mii.wID = MENU_EXPORT;
+			InsertMenuItem( hMenuSub_file, 5, TRUE, &mii );
+
+			mii.fType = MFT_SEPARATOR;
+			InsertMenuItem( hMenuSub_file, 6, TRUE, &mii );
+
+			mii.fType = MFT_STRING;
 			mii.dwTypeData = L"E&xit";
 			mii.cch = 5;
 			mii.wID = MENU_EXIT;
 			mii.fState = MFS_ENABLED;
-			InsertMenuItem( hMenuSub_file, 5, TRUE, &mii );
+			InsertMenuItem( hMenuSub_file, 7, TRUE, &mii );
 
 			// EDIT MENU
 			mii.fType = MFT_STRING;
@@ -475,34 +435,42 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 1, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_RIGHT;
-			lvc.pszText = L"Size";
-			lvc.cx = 65;
+			lvc.pszText = L"Cache Entry Offset";
+			lvc.cx = 110;
 			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 2, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Entry Location";
-			lvc.cx = 88;
+			lvc.pszText = L"Cache Entry Size";
+			lvc.cx = 95;
 			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 3, ( LPARAM )&lvc );
+
+			lvc.pszText = L"Data Offset";
+			lvc.cx = 88;
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 4, ( LPARAM )&lvc );
+
+			lvc.pszText = L"Data Size";
+			lvc.cx = 65;
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 5, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = L"Data Checksum";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 4, ( LPARAM )&lvc );
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 6, ( LPARAM )&lvc );
 
 			lvc.pszText = L"Header Checksum";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 5, ( LPARAM )&lvc );
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 7, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Entry Hash";
+			lvc.pszText = L"Cache Entry Hash";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 6, ( LPARAM )&lvc );
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 8, ( LPARAM )&lvc );
 
 			lvc.pszText = L"System";
 			lvc.cx = 85;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 7, ( LPARAM )&lvc );
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 9, ( LPARAM )&lvc );
 
 			lvc.pszText = L"Location";
 			lvc.cx = 200;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 8, ( LPARAM )&lvc );
+			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 10, ( LPARAM )&lvc );
 
 			// Save our initial window position.
 			GetWindowRect( hWnd, &last_pos );
@@ -732,6 +700,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							pi->offset = ofn.nFileOffset;
 							pi->output_path = NULL;
+							pi->type = 0;
 							cmd_line = 0;
 
 							// filepath will be freed in the thread.
@@ -769,6 +738,37 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							save_type->lpiidl = lpiidl;
 							save_type->save_all = ( LOWORD( wParam ) == MENU_SAVE_ALL ? true : false );
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
+						}
+					}
+					break;
+
+					case MENU_EXPORT:
+					{
+						wchar_t *file_path = ( wchar_t * )malloc( sizeof ( wchar_t ) * MAX_PATH );
+						memset( file_path, 0, sizeof ( wchar_t ) * MAX_PATH );
+
+						OPENFILENAME ofn = { 0 };
+						ofn.lStructSize = sizeof( OPENFILENAME );
+						ofn.hwndOwner = hWnd;
+						ofn.lpstrFilter = L"CSV (Comma delimited) (*.csv)\0*.csv\0";
+						ofn.lpstrDefExt = L"csv";
+						ofn.lpstrTitle = L"Export list to a CSV (comma-separated values) file";
+						ofn.lpstrFile = file_path;
+						ofn.nMaxFile = MAX_PATH;
+						ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_READONLY;
+
+						if ( GetSaveFileNameW( &ofn ) )
+						{
+							save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_csv thread.
+							save_type->filepath = file_path;
+							save_type->lpiidl = NULL;
+							save_type->save_all = true;
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )save_type, 0, NULL ) );
+
+						}
+						else
+						{
+							free( file_path );
 						}
 					}
 					break;
@@ -827,7 +827,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBox( hWnd, L"Thumbcache Viewer is made free under the GPLv3 license.\n\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBox( hWnd, L"Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.0\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -915,6 +915,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 								}
 							}
 							break;
+
+							case 'E':	// Export list to a CSV (comma-separated values) file.
+							{
+								if ( SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) > 0 )
+								{
+									SendMessage( hWnd, WM_COMMAND, MENU_EXPORT, 0 );
+								}
+							}
+							break;
 						}
 					}
 				}
@@ -927,35 +936,49 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						switch ( ( ( NMLISTVIEW * )lParam )->iSubItem )
 						{
-							case 2:	// Change the size column info.
+							case 2:	// Change the cache entry offset column info.
 							{
-								is_kbytes_size = !is_kbytes_size;
+								is_kbytes_c_offset = !is_kbytes_c_offset;
 								InvalidateRect( g_hWnd_list, NULL, TRUE );
 							}
 							break;
 
-							case 3:	// Change the database location column info.
+							case 3:	// Change the cache entry size column info.
 							{
-								is_kbytes_offset = !is_kbytes_offset;
+								is_kbytes_c_size = !is_kbytes_c_size;
 								InvalidateRect( g_hWnd_list, NULL, TRUE );
 							}
 							break;
 
-							case 4:	// Change the data checksum column info.
+							case 4:	// Change the data offset column info.
+							{
+								is_kbytes_d_offset = !is_kbytes_d_offset;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+
+							case 5:	// Change the data size column info.
+							{
+								is_kbytes_d_size = !is_kbytes_d_size;
+								InvalidateRect( g_hWnd_list, NULL, TRUE );
+							}
+							break;
+
+							case 6:	// Change the data checksum column info.
 							{
 								is_dc_lower = !is_dc_lower;
 								InvalidateRect( g_hWnd_list, NULL, TRUE );
 							}
 							break;
 							
-							case 5:	// Change the header checksum column info.
+							case 7:	// Change the header checksum column info.
 							{
 								is_hc_lower = !is_hc_lower;
 								InvalidateRect( g_hWnd_list, NULL, TRUE );
 							}
 							break;
 
-							case 6:	// Change the entry hash column info.
+							case 8:	// Change the entry hash column info.
 							{
 								is_eh_lower = !is_eh_lower;
 								InvalidateRect( g_hWnd_list, NULL, TRUE );
@@ -1266,7 +1289,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						return TRUE;	// Don't draw selected items because their lParam values are being deleted.
 					}
 
-					HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HOTLIGHT ) );
+					HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HIGHLIGHT ) );
 					FillRect( dis->hDC, &dis->rcItem, color );
 					DeleteObject( color );
 					selected = true;
@@ -1317,14 +1340,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							buf = tbuf;	// Reset the buffer pointer.
 							RIGHT_COLUMNS = DT_RIGHT;
 
-							// Depending on our toggle, output the size in either kilobytes or bytes.
-							if ( is_kbytes_size == true )
+							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
+							if ( is_kbytes_c_offset == true )
 							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
+								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->header_offset );
 							}
 							else
 							{
-								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
+								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->header_offset / 1024 );
 							}
 						}
 						break;
@@ -1333,8 +1356,26 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							RIGHT_COLUMNS = DT_RIGHT;
 
+							unsigned int cache_entry_size = ( ( fileinfo * )lvi.lParam )->size + ( ( ( fileinfo * )lvi.lParam )->data_offset - ( ( fileinfo * )lvi.lParam )->header_offset );
+
+							// Depending on our toggle, output the size in either kilobytes or bytes.
+							if ( is_kbytes_c_size == true )
+							{
+								swprintf_s( buf, MAX_PATH, L"%d KB", cache_entry_size / 1024 );
+							}
+							else
+							{
+								swprintf_s( buf, MAX_PATH, L"%d B", cache_entry_size );
+							}
+						}
+						break;
+
+						case 4:
+						{
+							RIGHT_COLUMNS = DT_RIGHT;
+
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-							if ( is_kbytes_offset == true )
+							if ( is_kbytes_d_offset == true )
 							{
 								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->data_offset );
 							}
@@ -1345,7 +1386,23 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 						break;
 
-						case 4:
+						case 5:
+						{
+							RIGHT_COLUMNS = DT_RIGHT;
+
+							// Depending on our toggle, output the size in either kilobytes or bytes.
+							if ( is_kbytes_d_size == true )
+							{
+								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
+							}
+							else
+							{
+								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
+							}
+						}
+						break;
+
+						case 6:
 						{
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_dc_lower == true )
@@ -1369,7 +1426,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 						break;
 
-						case 5:
+						case 7:
 						{
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_hc_lower == true )
@@ -1393,7 +1450,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 						break;
 
-						case 6:
+						case 8:
 						{
 							// Output the hex string in either lowercase or uppercase.
 							if ( is_eh_lower == true )
@@ -1407,7 +1464,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 						break;
 
-						case 7:
+						case 9:
 						{
 							if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 )
 							{
@@ -1421,14 +1478,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 8.1" );
 							}
-							else
+							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_VISTA )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows Vista" );
+							}
+							else
+							{
+								wcscpy_s( buf, MAX_PATH, L"Unknown" );
 							}
 						}
 						break;
 
-						case 8:
+						case 10:
 						{
 							buf = ( ( fileinfo * )lvi.lParam )->si->dbpath;
 						}
@@ -1455,11 +1516,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					rc.bottom = height;
 
 					// Shadow text position.
-					RECT rc2 = rc;
-					rc2.left += 1;
-					rc2.top += 1;
-					rc2.right += 1;
-					rc2.bottom += 1;
+					//RECT rc2 = rc;
+					//rc2.left += 1;
+					//rc2.top += 1;
+					//rc2.right += 1;
+					//rc2.bottom += 1;
 
 					// Create and save a bitmap in memory to paint to.
 					HDC hdcMem = CreateCompatibleDC( dis->hDC );
@@ -1477,16 +1538,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					if ( selected == true )
 					{
 						// Fill the background.
-						HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HOTLIGHT ) );
+						HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HIGHLIGHT ) );
 						FillRect( hdcMem, &rc, color );
 						DeleteObject( color );
 
 						// Shadow color - black.
-						SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
-						DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
+						//SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
+						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
+
 						// White text.
 						SetTextColor( hdcMem, RGB( 0xFF, 0xFF, 0xFF ) );
 						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
+
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCCOPY );
 					}
 					else	// Draw normal text.
@@ -1497,13 +1560,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						DeleteObject( color );
 
 						// Shadow color - light grey.
-						SetTextColor( hdcMem, RGB( 0xE0, 0xE0, 0xE0 ) );
-						DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
+						//SetTextColor( hdcMem, RGB( 0xE0, 0xE0, 0xE0 ) );
+						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 
 						// Show red text if our checksums don't match and black for everything else.
-						SetTextColor( hdcMem, RGB( ( ( ( i == 4 && ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum ) ) || ( i == 5 && ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
-
+						SetTextColor( hdcMem, RGB( ( ( ( i == 6 && ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum ) ) || ( i == 7 && ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
 						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
+
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCAND );
 					}
 
@@ -1629,6 +1692,7 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 			int count = DragQueryFile( ( HDROP )wParam, -1, NULL, 0 );
 
 			pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+			pi->type = 0;
 			pi->filepath = NULL;
 			pi->offset = 0;
 			pi->output_path = NULL;

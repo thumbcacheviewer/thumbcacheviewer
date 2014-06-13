@@ -24,6 +24,7 @@
 HWND g_hWnd_main = NULL;	// Handle to our main window.
 HWND g_hWnd_image = NULL;	// Handle to the image window.
 HWND g_hWnd_scan = NULL;	// Handle to our scan window.
+HWND g_hWnd_active = NULL;	// Handle to the active window. Used to handle tab stops.
 
 HFONT hFont = NULL;			// Handle to our font object.
 
@@ -116,7 +117,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		return 1;
 	}
 
-	g_hWnd_scan = CreateWindow( L"scan", L"Map File Paths to Entry Hashes", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - ( MIN_HEIGHT - 155 ) ) / 2 ), MIN_WIDTH, ( MIN_HEIGHT - 155 ), g_hWnd_main, NULL, NULL, NULL );
+	g_hWnd_scan = CreateWindow( L"scan", L"Map File Paths to Cache Entry Hashes", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - ( MIN_HEIGHT - 125 ) ) / 2 ), MIN_WIDTH, ( MIN_HEIGHT - 125 ), g_hWnd_main, NULL, NULL, NULL );
 
 	if ( !g_hWnd_scan )
 	{
@@ -137,6 +138,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			{
 				// Allocate enough space to hold each parameter. They should all be full paths.
 				pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+				pi->type = 0;
 				pi->offset = 0;
 				pi->output_path = NULL;
 				pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * ( argCount - 1 ) ) + 1 ) );
@@ -155,7 +157,29 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 						// See if the next parameter exists. We'll assume it's the output directory.
 						if ( i + 1 < argCount )
 						{
+							if ( pi->output_path != NULL )
+							{
+								free( pi->output_path );
+							}
+
 							pi->output_path = _wcsdup( szArgList[ ++i ] );
+							pi->type = 0;
+
+							cmd_line = 2;	// Save the database(s) from the command-line. Do not display the main window or any prompts.
+						}
+					}
+					else if ( filepath_length > 1 && szArgList[ i ][ 0 ] == L'-' && ( szArgList[ i ][ 1 ] == L'c' || szArgList[ i ][ 1 ] == L'C' ) )
+					{
+						// See if the next parameter exists. We'll assume it's the output directory.
+						if ( i + 1 < argCount )
+						{
+							if ( pi->output_path != NULL )
+							{
+								free( pi->output_path );
+							}
+
+							pi->output_path = _wcsdup( szArgList[ ++i ] );
+							pi->type = 1;
 
 							cmd_line = 2;	// Save the database(s) from the command-line. Do not display the main window or any prompts.
 						}
@@ -207,8 +231,11 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	MSG msg;
 	while ( GetMessage( &msg, NULL, 0, 0 ) > 0 )
 	{
-		TranslateMessage( &msg );
-		DispatchMessage( &msg );
+		if ( g_hWnd_active == NULL || !IsDialogMessage( g_hWnd_active, &msg ) )	// Checks tab stops.
+		{
+			TranslateMessage( &msg );
+			DispatchMessage( &msg );
+		}
 	}
 
 	// Delete our font.

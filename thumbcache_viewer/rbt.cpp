@@ -230,7 +230,7 @@ rbt_status rbt_insert( rbt_tree *tree, void *key, void *val )
 {
 	if ( tree == NULL )
 	{
-		return RBT_STATUS_OK;
+		return RBT_STATUS_TREE_NOT_FOUND;
 	}
 
 	node_type *current, *parent, *x;
