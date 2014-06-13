@@ -19,6 +19,8 @@
 #include "globals.h"
 #include "crc64.h"
 
+#include <stdio.h>
+
 #define FILE_TYPE_BMP	"BM"
 #define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
 #define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
@@ -84,7 +86,7 @@ unsigned long long hash_data( char *data, unsigned long long hash, short length 
 void hash_file( wchar_t *filepath, wchar_t *extension )
 {
 	// Initial hash value. This value was found in shell32.dll.
-	unsigned long long hash = 0x95E729BA2C37FD21;	
+	unsigned long long hash = 0x95E729BA2C37FD21;
 
 	// Hash Volume GUID
 	hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
@@ -127,12 +129,12 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 	// Update our scan window with new scan information.
 	if ( show_details == true )
 	{
-		SendMessage( g_hWnd_hashing, WM_SETTEXT, 0, ( LPARAM )filepath );
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
 		wchar_t buf[ 19 ] = { 0 };
 		swprintf_s( buf, 19, L"0x%016llx", hash );
-		SendMessage( g_hWnd_static_hash, WM_SETTEXT, 0, ( LPARAM )buf );
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 4, ( LPARAM )buf );
 		swprintf_s( buf, 19, L"%lu", file_count );
-		SendMessage( g_hWnd_static_count, WM_SETTEXT, 0, ( LPARAM )buf );
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )buf );
 	}
 }
 
@@ -221,7 +223,7 @@ unsigned __stdcall scan_files( void *pArguments )
 	// This will block every other thread from entering until the first thread is complete.
 	EnterCriticalSection( &pe_cs );
 
-	SetWindowText( g_hWnd_scan, L"Map File Paths to Entry Hashes - Please wait..." );	// Update the window title.
+	SetWindowText( g_hWnd_scan, L"Map File Paths to Cache Entry Hashes - Please wait..." );	// Update the window title.
 	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, TRUE, 0 );	// SetCursor only works from the main thread. Set it to an arrow with hourglass.
 
 	// File path will be at least 2 characters. Copy our drive to get the volume GUID.
@@ -264,7 +266,7 @@ unsigned __stdcall scan_files( void *pArguments )
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 			// Don't attempt to insert the fileinfo if it's already in the tree, or if it's a duplicate.
-			if ( !( ( ( fileinfo * )lvi.lParam )->flag & 8 ) && rbt_insert( fileinfo_tree, ( void * )( ( fileinfo * )lvi.lParam )->entry_hash, ( fileinfo * )lvi.lParam ) != RBT_STATUS_DUPLICATE_KEY )
+			if ( !( ( ( fileinfo * )lvi.lParam )->flag & 8 ) && rbt_insert( fileinfo_tree, ( void * )( ( fileinfo * )lvi.lParam )->entry_hash, ( fileinfo * )lvi.lParam ) == RBT_STATUS_OK )
 			{
 				( ( fileinfo * )lvi.lParam )->flag |= 8;
 			}
@@ -277,19 +279,13 @@ unsigned __stdcall scan_files( void *pArguments )
 		InvalidateRect( g_hWnd_list, NULL, TRUE );
 
 		// Update the details.
-		if ( kill_scan == false )
-		{
-			SendMessage( g_hWnd_hashing, WM_SETTEXT, 0, 0 );
-			SendMessage( g_hWnd_static_hash, WM_SETTEXT, 0, 0 );
-		}
-
 		if ( show_details == false )
 		{
 			swprintf_s( volume_guid, 50, L"%lu", file_count );
-			SendMessage( g_hWnd_static_count, WM_SETTEXT, 0, ( LPARAM )volume_guid );
+			SendMessage( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )volume_guid );
 		}
 
-		// Enable scan button, disable cancel button.
+		// Reset button and text.
 		SendMessage( g_hWnd_scan, WM_PROPAGATE, 2, 0 );
 
 		if ( match_count > 0 )
@@ -309,7 +305,7 @@ unsigned __stdcall scan_files( void *pArguments )
 	}
 
 	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
-	SetWindowText( g_hWnd_scan, L"Map File Paths to Entry Hashes" );	// Reset the window title.
+	SetWindowText( g_hWnd_scan, L"Map File Paths to Cache Entry Hashes" );	// Reset the window title.
 
 	// We're done. Let other threads continue.
 	LeaveCriticalSection( &pe_cs );
@@ -784,6 +780,235 @@ unsigned __stdcall verify_checksums( void *pArguments )
 	if ( shutdown_mutex != NULL )
 	{
 		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
+// Allocates a new string if characters need escaping. Otherwise, it returns NULL.
+char *escape_csv( const char *string )
+{
+	char *escaped_string = NULL;
+	char *q = NULL;
+	const char *p = NULL;
+	int c = 0;
+
+	if ( string == NULL )
+	{
+		return NULL;
+	}
+
+	// Get the character count and offset it for any quotes.
+	for ( c = 0, p = string; *p != NULL; ++p ) 
+	{
+		if ( *p != '\"' )
+		{
+			++c;
+		}
+		else
+		{
+			c += 2;
+		}
+	}
+
+	// If the string has no special characters to escape, then return NULL.
+	if ( c <= ( p - string ) )
+	{
+		return NULL;
+	}
+
+	q = escaped_string = ( char * )malloc( sizeof( char ) * ( c + 1 ) );
+
+	for ( p = string; *p != NULL; ++p ) 
+	{
+		if ( *p != '\"' )
+		{
+			*q = *p;
+			++q;
+		}
+		else
+		{
+			*q++ = '\"';
+			*q++ = '\"';
+		}
+	}
+
+	*q = 0;	// Sanity.
+
+	return escaped_string;
+}
+
+unsigned __stdcall save_csv( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	SetWindowText( g_hWnd_main, L"Thumbcache Viewer - Please wait..." );	// Update the window title.
+	EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+	update_menus( true );													// Disable all processing menu items.
+
+	save_param *save_type = ( save_param * )pArguments;
+
+	// Open our config file if it exists.
+	HANDLE hFile = CreateFile( save_type->filepath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+	if ( hFile != INVALID_HANDLE_VALUE )
+	{
+		int size = ( 32768 + 1 );
+		DWORD write = 0;
+		int write_buf_offset = 0;
+		char *system_string = NULL;
+
+		char *write_buf = ( char * )malloc( sizeof( char ) * size );
+
+		// Write the UTF-8 BOM and CSV column titles.
+		WriteFile( hFile, "\xEF\xBB\xBF" "Filename,Cache Entry Offset (bytes),Cache Entry Size (bytes),Data Offset (bytes),Data Size (bytes),Data Checksum,Header Checksum,Cache Entry Hash,System,Location", 164, &write, NULL );
+
+		// Get the number of items we'll be saving.
+		int save_items = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+		// Retrieve the lParam value from the selected listview item.
+		LVITEM lvi = { NULL };
+		lvi.mask = LVIF_PARAM;
+
+		// Go through all the items we'll be saving.
+		for ( int i = 0; i < save_items; ++i )
+		{
+			// Stop processing and exit the thread.
+			if ( kill_thread == true )
+			{
+				break;
+			}
+
+			lvi.iItem = i;
+			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+			int filename_length = WideCharToMultiByte( CP_UTF8, 0, ( ( fileinfo * )lvi.lParam )->filename, -1, NULL, 0, NULL, NULL );
+			char *utf8_filename = ( char * )malloc( sizeof( char ) * filename_length ); // Size includes the null character.
+			filename_length = WideCharToMultiByte( CP_UTF8, 0, ( ( fileinfo * )lvi.lParam )->filename, -1, utf8_filename, filename_length, NULL, NULL ) - 1;
+
+			// The filename comes from the database entry and it could have unsupported characters.
+			char *escaped_filename = escape_csv( utf8_filename );
+			if ( escaped_filename != NULL )
+			{
+				free( utf8_filename );
+				utf8_filename = escaped_filename;
+			}
+
+			int dbpath_length = WideCharToMultiByte( CP_UTF8, 0, ( ( fileinfo * )lvi.lParam )->si->dbpath, -1, NULL, 0, NULL, NULL );
+			char *utf8_dbpath = ( char * )malloc( sizeof( char ) * dbpath_length ); // Size includes the null character.
+			dbpath_length = WideCharToMultiByte( CP_UTF8, 0, ( ( fileinfo * )lvi.lParam )->si->dbpath, -1, utf8_dbpath, dbpath_length, NULL, NULL ) - 1;
+
+			switch ( ( ( fileinfo * )lvi.lParam )->si->system )
+			{
+				case WINDOWS_7:
+				{
+					system_string = "Windows 7";
+				}
+				break;
+
+				case WINDOWS_8:
+				case WINDOWS_8v2:
+				case WINDOWS_8v3:
+				{
+					system_string = "Windows 8";
+				}
+				break;
+
+				case WINDOWS_8_1:
+				{
+					system_string = "Windows 8.1";
+				}
+				break;
+
+				case WINDOWS_VISTA:
+				{
+					system_string = "Windows Vista";
+				}
+				break;
+
+				default:
+				{
+					system_string = "Unknown";
+				}
+				break;
+			}
+
+			// See if the next entry can fit in the buffer. If it can't, then we dump the buffer.
+			if ( write_buf_offset + filename_length + dbpath_length + ( 10 * 4 ) + ( 20 * 5 ) + 13 + 31 > size )
+			{
+				// Dump the buffer.
+				WriteFile( hFile, write_buf, write_buf_offset, &write, NULL );
+				write_buf_offset = 0;
+			}
+
+			write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, "\r\n\"%s\",%lu,%lu,%lu,%lu,0x%016llx",
+										   utf8_filename,
+										   ( ( fileinfo * )lvi.lParam )->header_offset, ( ( fileinfo * )lvi.lParam )->size + ( ( ( fileinfo * )lvi.lParam )->data_offset - ( ( fileinfo * )lvi.lParam )->header_offset ),
+										   ( ( fileinfo * )lvi.lParam )->data_offset, ( ( fileinfo * )lvi.lParam )->size,
+										   ( ( fileinfo * )lvi.lParam )->data_checksum );
+										  
+			if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
+			{
+				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : 0x%016llx",
+										   ( ( fileinfo * )lvi.lParam )->v_data_checksum );
+			}
+
+			write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",0x%016llx",
+										   ( ( fileinfo * )lvi.lParam )->header_checksum );
+
+			if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
+			{
+				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : 0x%016llx",
+										   ( ( fileinfo * )lvi.lParam )->v_header_checksum );
+			}
+
+			write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",0x%016llx,%s,\"%s\"",
+										   ( ( fileinfo * )lvi.lParam )->entry_hash,
+										   system_string,
+										   utf8_dbpath );
+
+			free( utf8_filename );
+			free( utf8_dbpath );
+		}
+
+		// If there's anything remaining in the buffer, then write it to the file.
+		if ( write_buf_offset > 0 )
+		{
+			WriteFile( hFile, write_buf, write_buf_offset, &write, NULL );
+		}
+
+		free( write_buf );
+
+		CloseHandle( hFile );
+	}
+
+	free( save_type->filepath );
+	free( save_type );
+
+	update_menus( false );									// Enable the appropriate menu items.
+	SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
+	EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive.
+	SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys. 
+	SetWindowText( g_hWnd_main, PROGRAM_CAPTION );			// Reset the window title.
+
+	// Release the mutex if we're killing the thread.
+	if ( shutdown_mutex != NULL )
+	{
+		ReleaseSemaphore( shutdown_mutex, 1, NULL );
+	}
+	else if ( cmd_line == 2 )	// Exit the program if we're done saving.
+	{
+		// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
+		SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
 	}
 
 	in_thread = false;
@@ -1416,26 +1641,37 @@ unsigned __stdcall read_database( void *pArguments )
 	}
 	while ( construct_filepath == true && *fname != L'\0' );
 
-	// Save the files if the user specified an output directory through the command-line.
+	// Save the files or a CSV if the user specified an output directory through the command-line.
 	if ( pi->output_path != NULL )
 	{
-		wchar_t output_path[ MAX_PATH ] = { 0 };
-		// Create and set the directory that we'll be outputting files to.
-		if ( GetFileAttributes( pi->output_path ) == INVALID_FILE_ATTRIBUTES )
-		{
-			CreateDirectory( pi->output_path, NULL );
-		}
-
-		SetCurrentDirectory( pi->output_path );			// Set the path (relative or full)
-		GetCurrentDirectory( MAX_PATH, output_path );	// Get the full path
-
-		save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_items thread.
-		save_type->filepath = _wcsdup( output_path );
+		save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the called threads.
 		save_type->lpiidl = NULL;
 		save_type->save_all = true;
-		CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
 
-		free( pi->output_path );
+		if ( pi->type == 0 )	// Save thumbnail images.
+		{
+			wchar_t output_path[ MAX_PATH ] = { 0 };
+			// Create and set the directory that we'll be outputting files to.
+			if ( GetFileAttributes( pi->output_path ) == INVALID_FILE_ATTRIBUTES )
+			{
+				CreateDirectory( pi->output_path, NULL );
+			}
+
+			SetCurrentDirectory( pi->output_path );			// Set the path (relative or full)
+			GetCurrentDirectory( MAX_PATH, output_path );	// Get the full path
+
+			save_type->filepath = _wcsdup( output_path );
+
+			free( pi->output_path );
+
+			CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
+		}
+		else	// Save CSV.
+		{
+			save_type->filepath = pi->output_path;
+
+			CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )save_type, 0, NULL ) );
+		}
 	}
 
 	// Free the path info.

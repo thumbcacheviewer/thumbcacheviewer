@@ -49,13 +49,14 @@
 #define MENU_OPEN		1001
 #define MENU_SAVE_ALL	1002
 #define MENU_SAVE_SEL	1003
-#define MENU_EXIT		1004
-#define MENU_ABOUT		1005
-#define MENU_SELECT_ALL	1006
-#define MENU_REMOVE_SEL	1007
-#define MENU_HIDE_BLANK	1008
-#define MENU_CHECKSUMS	1009
-#define MENU_SCAN		1010
+#define MENU_EXPORT		1004
+#define MENU_EXIT		1005
+#define MENU_ABOUT		1006
+#define MENU_SELECT_ALL	1007
+#define MENU_REMOVE_SEL	1008
+#define MENU_HIDE_BLANK	1009
+#define MENU_CHECKSUMS	1010
+#define MENU_SCAN		1011
 
 #define WINDOWS_VISTA	0x14
 #define WINDOWS_7		0x15
@@ -160,18 +161,17 @@ struct shared_info
 // This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
 struct fileinfo
 {
-	unsigned int header_offset;			// Offset of header.
-	unsigned int data_offset;			// Offset of data.
-	unsigned int size;					// Size of file.
-	wchar_t *filename;					// Name of the database entry.
 	unsigned long long entry_hash;		// Entry hash
 	unsigned long long data_checksum;	// Data checksum
 	unsigned long long header_checksum;	// Header checksum
 	unsigned long long v_data_checksum;	// Verified data checksum
 	unsigned long long v_header_checksum;	// Verified header checksum
-	unsigned char flag;					// 1 = bmp, 2 = jpg, 4 = png, 8 = in tree, 16 = verified headers, 32 = bad header, 64 = bad data.
-
+	wchar_t *filename;					// Name of the database entry.
 	shared_info *si;					// Shared information between items in a database.
+	unsigned int header_offset;			// Offset of header.
+	unsigned int data_offset;			// Offset of data.
+	unsigned int size;					// Size of file.
+	unsigned char flag;					// 1 = bmp, 2 = jpg, 4 = png, 8 = in tree, 16 = verified headers, 32 = bad header, 64 = bad data.
 };
 
 // Temporary list for blank entries.
@@ -185,8 +185,9 @@ struct blank_entries_linked_list
 struct pathinfo
 {
 	wchar_t *filepath;			// Path to the file/folder
-	unsigned short offset;		// Offset to the first file.
 	wchar_t *output_path;		// If the user wants to save files.
+	unsigned short offset;		// Offset to the first file.
+	unsigned char type;			// 0 = Save thumbnails, 1 = Save CSV.
 };
 
 // Save To structure.
@@ -210,6 +211,7 @@ unsigned __stdcall read_database( void *pArguments );
 unsigned __stdcall remove_items( void *pArguments );
 unsigned __stdcall show_hide_items( void *pArguments );
 unsigned __stdcall verify_checksums( void *pArguments );
+unsigned __stdcall save_csv( void *pArguments );
 unsigned __stdcall save_items( void *pArguments );
 unsigned __stdcall scan_files( void *pArguments );
 bool is_close( int a, int b );
@@ -222,9 +224,7 @@ extern HWND g_hWnd_main;			// Handle to our main window.
 extern HWND g_hWnd_image;			// Handle to our image window.
 extern HWND g_hWnd_scan;			// Handle to our scan window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
-extern HWND g_hWnd_hashing;			// Handle to the hashing edit control.
-extern HWND g_hWnd_static_hash;		// Handle to the static hash control.
-extern HWND g_hWnd_static_count;	// Handle to the static count control.
+extern HWND g_hWnd_active;			// Handle to the active window. Used to handle tab stops.
 
 extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
 
