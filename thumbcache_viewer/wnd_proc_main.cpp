@@ -266,120 +266,121 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			g_hMenuSub_context = CreatePopupMenu();
 
 			// FILE MENU
-			MENUITEMINFO mii = { NULL };
-			mii.cbSize = sizeof( MENUITEMINFO );
+			MENUITEMINFOA mii = { NULL };
+			mii.cbSize = sizeof( MENUITEMINFOA );
 			mii.fMask = MIIM_TYPE | MIIM_ID | MIIM_STATE;
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"&Open...\tCtrl+O";
+			mii.dwTypeData = "&Open...\tCtrl+O";
 			mii.cch = 15;
 			mii.wID = MENU_OPEN;
-			InsertMenuItem( hMenuSub_file, 0, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 0, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( hMenuSub_file, 1, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 1, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Save All...\tCtrl+S";
+			mii.dwTypeData = "Save All...\tCtrl+S";
 			mii.cch = 18;
 			mii.wID = MENU_SAVE_ALL;
 			mii.fState = MFS_DISABLED;
-			InsertMenuItem( hMenuSub_file, 2, TRUE, &mii );
-			mii.dwTypeData = L"Save Selected...\tCtrl+Shift+S";
+			InsertMenuItemA( hMenuSub_file, 2, TRUE, &mii );
+
+			mii.dwTypeData = "Save Selected...\tCtrl+Shift+S";
 			mii.cch = 29;
 			mii.wID = MENU_SAVE_SEL;
-			InsertMenuItem( hMenuSub_file, 3, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 3, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( hMenuSub_file, 4, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 4, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Export to CSV...\tCtrl+E";
+			mii.dwTypeData = "Export to CSV...\tCtrl+E";
 			mii.cch = 23;
 			mii.wID = MENU_EXPORT;
-			InsertMenuItem( hMenuSub_file, 5, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 5, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( hMenuSub_file, 6, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 6, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"E&xit";
+			mii.dwTypeData = "E&xit";
 			mii.cch = 5;
 			mii.wID = MENU_EXIT;
 			mii.fState = MFS_ENABLED;
-			InsertMenuItem( hMenuSub_file, 7, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_file, 7, TRUE, &mii );
 
 			// EDIT MENU
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Remove Selected\tCtrl+R";
+			mii.dwTypeData = "Remove Selected\tCtrl+R";
 			mii.cch = 22;
 			mii.wID = MENU_REMOVE_SEL;
 			mii.fState = MFS_DISABLED;
-			InsertMenuItem( hMenuSub_edit, 0, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_edit, 0, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( hMenuSub_edit, 1, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_edit, 1, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Select All\tCtrl+A";
+			mii.dwTypeData = "Select All\tCtrl+A";
 			mii.cch = 17;
 			mii.wID = MENU_SELECT_ALL;
-			InsertMenuItem( hMenuSub_edit, 2, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_edit, 2, TRUE, &mii );
 
 			// VIEW MENU
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Hide Blank Entries\tCtrl+H";
+			mii.dwTypeData = "Hide Blank Entries\tCtrl+H";
 			mii.cch = 25;
 			mii.wID = MENU_HIDE_BLANK;
 			mii.fState = MFS_ENABLED;
-			InsertMenuItem( hMenuSub_view, 0, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_view, 0, TRUE, &mii );
 
 			// TOOLS MENU
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Verify Checksums\tCtrl+V";
+			mii.dwTypeData = "Verify Checksums\tCtrl+V";
 			mii.cch = 23;
 			mii.wID = MENU_CHECKSUMS;
 			mii.fState = MFS_DISABLED;
-			InsertMenuItem( hMenuSub_tools, 0, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_tools, 0, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Map File Paths...\tCtrl+M";
+			mii.dwTypeData = "Map File Paths...\tCtrl+M";
 			mii.cch = 24;
 			mii.wID = MENU_SCAN;
-			InsertMenuItem( hMenuSub_tools, 1, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_tools, 1, TRUE, &mii );
 
 			// HELP MENU
-			mii.dwTypeData = L"&About";
+			mii.dwTypeData = "&About";
 			mii.cch = 6;
 			mii.wID = MENU_ABOUT;
 			mii.fState = MFS_ENABLED;
-			InsertMenuItem( hMenuSub_help, 0, TRUE, &mii );
+			InsertMenuItemA( hMenuSub_help, 0, TRUE, &mii );
 
 			// MENU BAR
 			mii.fMask = MIIM_TYPE | MIIM_SUBMENU;
-			mii.dwTypeData = L"&File";
+			mii.dwTypeData = "&File";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_file;
-			InsertMenuItem( g_hMenu, 0, TRUE, &mii );
+			InsertMenuItemA( g_hMenu, 0, TRUE, &mii );
 
-			mii.dwTypeData = L"&Edit";
+			mii.dwTypeData = "&Edit";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_edit;
-			InsertMenuItem( g_hMenu, 1, TRUE, &mii );
+			InsertMenuItemA( g_hMenu, 1, TRUE, &mii );
 
-			mii.dwTypeData = L"&View";
+			mii.dwTypeData = "&View";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_view;
-			InsertMenuItem( g_hMenu, 2, TRUE, &mii );
+			InsertMenuItemA( g_hMenu, 2, TRUE, &mii );
 
-			mii.dwTypeData = L"&Tools";
+			mii.dwTypeData = "&Tools";
 			mii.cch = 6;
 			mii.hSubMenu = hMenuSub_tools;
-			InsertMenuItem( g_hMenu, 3, TRUE, &mii );
+			InsertMenuItemA( g_hMenu, 3, TRUE, &mii );
 
-			mii.dwTypeData = L"&Help";
+			mii.dwTypeData = "&Help";
 			mii.cch = 5;
 			mii.hSubMenu = hMenuSub_help;
-			InsertMenuItem( g_hMenu, 4, TRUE, &mii );
+			InsertMenuItemA( g_hMenu, 4, TRUE, &mii );
 
 			// Set our menu bar.
 			SetMenu( hWnd, g_hMenu );
@@ -387,28 +388,28 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// CONTEXT MENU (for right click)
 			mii.fMask = MIIM_TYPE | MIIM_ID | MIIM_STATE;
 			mii.fState = MFS_DISABLED;
-			mii.dwTypeData = L"Save Selected...";
+			mii.dwTypeData = "Save Selected...";
 			mii.cch = 16;
 			mii.wID = MENU_SAVE_SEL;
-			InsertMenuItem( g_hMenuSub_context, 0, TRUE, &mii );
+			InsertMenuItemA( g_hMenuSub_context, 0, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( g_hMenuSub_context, 1, TRUE, &mii );
+			InsertMenuItemA( g_hMenuSub_context, 1, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Remove Selected";
+			mii.dwTypeData = "Remove Selected";
 			mii.cch = 15;
 			mii.wID = MENU_REMOVE_SEL;
-			InsertMenuItem( g_hMenuSub_context, 2, TRUE, &mii );
+			InsertMenuItemA( g_hMenuSub_context, 2, TRUE, &mii );
 
 			mii.fType = MFT_SEPARATOR;
-			InsertMenuItem( g_hMenuSub_context, 3, TRUE, &mii );
+			InsertMenuItemA( g_hMenuSub_context, 3, TRUE, &mii );
 
 			mii.fType = MFT_STRING;
-			mii.dwTypeData = L"Select All";
+			mii.dwTypeData = "Select All";
 			mii.cch = 10;
 			mii.wID = MENU_SELECT_ALL;
-			InsertMenuItem( g_hMenuSub_context, 4, TRUE, &mii );
+			InsertMenuItemA( g_hMenuSub_context, 4, TRUE, &mii );
 
 			// Create our listview window.
 			g_hWnd_list = CreateWindow( WC_LISTVIEW, NULL, LVS_REPORT | LVS_EDITLABELS | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 0, 0, MIN_WIDTH, MIN_HEIGHT, hWnd, NULL, NULL, NULL );
@@ -422,55 +423,55 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SetWindowLong( g_hWnd_list, GWL_WNDPROC, ( LONG )ListViewSubProc );
 
 			// Initliaze our listview columns
-			LVCOLUMN lvc = { NULL }; 
+			LVCOLUMNA lvc = { NULL }; 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
 			lvc.fmt = LVCFMT_CENTER;
-			lvc.pszText = L"#";
+			lvc.pszText = "#";
 			lvc.cx = 34;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 0, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 0, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
-			lvc.pszText = L"Filename";
+			lvc.pszText = "Filename";
 			lvc.cx = 135;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 1, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_RIGHT;
-			lvc.pszText = L"Cache Entry Offset";
+			lvc.pszText = "Cache Entry Offset";
 			lvc.cx = 110;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 2, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 2, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Cache Entry Size";
+			lvc.pszText = "Cache Entry Size";
 			lvc.cx = 95;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 3, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 3, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Data Offset";
+			lvc.pszText = "Data Offset";
 			lvc.cx = 88;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 4, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 4, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Data Size";
+			lvc.pszText = "Data Size";
 			lvc.cx = 65;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 5, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 5, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
-			lvc.pszText = L"Data Checksum";
+			lvc.pszText = "Data Checksum";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 6, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 6, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Header Checksum";
+			lvc.pszText = "Header Checksum";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 7, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 7, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Cache Entry Hash";
+			lvc.pszText = "Cache Entry Hash";
 			lvc.cx = 125;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 8, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 8, ( LPARAM )&lvc );
 
-			lvc.pszText = L"System";
+			lvc.pszText = "System";
 			lvc.cx = 85;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 9, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 9, ( LPARAM )&lvc );
 
-			lvc.pszText = L"Location";
+			lvc.pszText = "Location";
 			lvc.cx = 200;
-			SendMessage( g_hWnd_list, LVM_INSERTCOLUMN, 10, ( LPARAM )&lvc );
+			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 10, ( LPARAM )&lvc );
 
 			// Save our initial window position.
 			GetWindowRect( hWnd, &last_pos );
@@ -611,7 +612,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			is_attached = false;
 			skip_main = false;
 
-			RECT rc = { 0 };
+			RECT rc;
 			GetClientRect( hWnd, &rc );
 
 			// Allow our listview to resize in proportion to the main window.
@@ -703,7 +704,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							pi->type = 0;
 							cmd_line = 0;
 
-							// filepath will be freed in the thread.
+							// pi will be freed in the thread.
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
 						}
 						else
@@ -733,10 +734,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						LPITEMIDLIST lpiidl = SHBrowseForFolder( &bi );
 						if ( lpiidl )
 						{
+							wchar_t *save_directory = ( wchar_t * )malloc( sizeof( wchar_t ) * MAX_PATH );
+							wmemset( save_directory, 0, MAX_PATH );
+
+							// Get the directory path from the id list.
+							SHGetPathFromIDList( lpiidl, save_directory );
+							CoTaskMemFree( lpiidl );
+
 							save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_items thread.
-							save_type->filepath = NULL;
-							save_type->lpiidl = lpiidl;
+							save_type->type = 0;	// Save files to filepath. The directory should exist so no need to build it.
 							save_type->save_all = ( LOWORD( wParam ) == MENU_SAVE_ALL ? true : false );
+							save_type->filepath = save_directory;
+
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
 						}
 					}
@@ -745,7 +754,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					case MENU_EXPORT:
 					{
 						wchar_t *file_path = ( wchar_t * )malloc( sizeof ( wchar_t ) * MAX_PATH );
-						memset( file_path, 0, sizeof ( wchar_t ) * MAX_PATH );
+						wmemset( file_path, 0, MAX_PATH );
 
 						OPENFILENAME ofn = { 0 };
 						ofn.lStructSize = sizeof( OPENFILENAME );
@@ -757,14 +766,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						ofn.nMaxFile = MAX_PATH;
 						ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_READONLY;
 
-						if ( GetSaveFileNameW( &ofn ) )
+						if ( GetSaveFileName( &ofn ) )
 						{
-							save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_csv thread.
-							save_type->filepath = file_path;
-							save_type->lpiidl = NULL;
-							save_type->save_all = true;
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )save_type, 0, NULL ) );
-
+							// file_path is freed in the save_csv thread.
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )file_path, 0, NULL ) );
 						}
 						else
 						{
@@ -827,7 +832,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBox( hWnd, L"Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.0\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.1\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1079,18 +1084,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.iItem = nmlv->iItem;
 					SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
+					fileinfo *fi = ( fileinfo * )lvi.lParam;
+					if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
+					{
+						break;
+					}
+
 					// Create a buffer to read in our new bitmap.
-					char *current_image = ( char * )malloc( sizeof( char ) * ( ( fileinfo * )lvi.lParam )->size );
+					char *current_image = ( char * )malloc( sizeof( char ) * fi->size );
 
 					// Attempt to open a file for reading.
-					HANDLE hFile = CreateFile( ( ( fileinfo * )lvi.lParam )->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+					HANDLE hFile = CreateFile( fi->si->dbpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 					if ( hFile != INVALID_HANDLE_VALUE )
 					{
 						DWORD read = 0;
 						// Set our file pointer to the beginning of the database file.
-						SetFilePointer( hFile, ( ( fileinfo * )lvi.lParam )->data_offset, 0, FILE_BEGIN );
+						SetFilePointer( hFile, fi->data_offset, 0, FILE_BEGIN );
 						// Read the entire image into memory.
-						ReadFile( hFile, current_image, ( ( fileinfo * )lvi.lParam )->size, &read, NULL );
+						ReadFile( hFile, current_image, fi->size, &read, NULL );
 						CloseHandle( hFile );
 
 						// If gdi_image exists, then delete it.
@@ -1127,15 +1138,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 
 						// Set our image window's icon to match the file extension.
-						if ( ( ( fileinfo * )lvi.lParam )->flag & 1 )
+						if ( fi->flag & FIF_TYPE_BMP )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_bmp );
 						}
-						else if ( ( ( fileinfo * )lvi.lParam )->flag & 2 )
+						else if ( fi->flag & FIF_TYPE_JPG )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_jpg );
 						}
-						else if ( ( ( fileinfo * )lvi.lParam )->flag & 4 )
+						else if ( fi->flag & FIF_TYPE_PNG )
 						{
 							SendMessage( g_hWnd_image, WM_SETICON, ICON_SMALL, ( LPARAM )hIcon_png );
 						}
@@ -1146,11 +1157,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						// Set the image window's new title.
 						wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
-						swprintf_s( new_title, MAX_PATH + 30, L"%.259s - %dx%d", ( ( fileinfo * )lvi.lParam )->filename, gdi_image->GetWidth(), gdi_image->GetHeight() );
+						swprintf_s( new_title, MAX_PATH + 30, L"%.259s - %dx%d", ( fi->filename != NULL ? fi->filename : L"" ), gdi_image->GetWidth(), gdi_image->GetHeight() );
 						SetWindowText( g_hWnd_image, new_title );
 
 						// See if our image window is minimized and set the rectangle to its old size if it is.
-						RECT rc = { 0 };
+						RECT rc;
 						if ( IsIconic( g_hWnd_image ) == TRUE )
 						{
 							rc = last_dim;
@@ -1197,6 +1208,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					// Save our current fileinfo.
 					current_fileinfo = ( fileinfo * )lvi.lParam;
+					if ( current_fileinfo == NULL )
+					{
+						return TRUE;
+					}
 					
 					// Get the bounding box of the Filename column we're editing.
 					current_edit_pos.top = 1;
@@ -1296,12 +1311,19 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				}
 
 				// Get the item's text.
-				wchar_t tbuf[ MAX_PATH ];
-				wchar_t *buf = tbuf;
 				LVITEM lvi = { 0 };
 				lvi.mask = LVIF_PARAM;
 				lvi.iItem = dis->itemID;
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );	// Get the lParam value from our item.
+
+				fileinfo *fi = ( fileinfo * )lvi.lParam;
+				if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
+				{
+					return TRUE;
+				}
+
+				wchar_t tbuf[ MAX_PATH ];
+				wchar_t *buf = tbuf;
 
 				// This is the full size of the row.
 				RECT last_rc = { 0 };
@@ -1331,7 +1353,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						case 1:
 						{
-							buf = ( ( fileinfo * )lvi.lParam )->filename;
+							buf = ( fi->filename != NULL ? fi->filename : L"" );
 						}
 						break;
 
@@ -1341,14 +1363,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-							if ( is_kbytes_c_offset == true )
-							{
-								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->header_offset );
-							}
-							else
-							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->header_offset / 1024 );
-							}
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset == true ? fi->header_offset : fi->header_offset / 1024 ) );
 						}
 						break;
 
@@ -1356,17 +1371,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							RIGHT_COLUMNS = DT_RIGHT;
 
-							unsigned int cache_entry_size = ( ( fileinfo * )lvi.lParam )->size + ( ( ( fileinfo * )lvi.lParam )->data_offset - ( ( fileinfo * )lvi.lParam )->header_offset );
+							unsigned int cache_entry_size = fi->size + ( fi->data_offset - fi->header_offset );
 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
-							if ( is_kbytes_c_size == true )
-							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", cache_entry_size / 1024 );
-							}
-							else
-							{
-								swprintf_s( buf, MAX_PATH, L"%d B", cache_entry_size );
-							}
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size == true ? cache_entry_size / 1024 : cache_entry_size ) );
 						}
 						break;
 
@@ -1375,14 +1383,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-							if ( is_kbytes_d_offset == true )
-							{
-								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->data_offset );
-							}
-							else
-							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->data_offset / 1024 );
-							}
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset == true ? fi->data_offset : fi->data_offset / 1024 ) );
 						}
 						break;
 
@@ -1391,37 +1392,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
-							if ( is_kbytes_d_size == true )
-							{
-								swprintf_s( buf, MAX_PATH, L"%d KB", ( ( fileinfo * )lvi.lParam )->size / 1024 );
-							}
-							else
-							{
-								swprintf_s( buf, MAX_PATH, L"%d B", ( ( fileinfo * )lvi.lParam )->size );
-							}
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size == true ? fi->size / 1024 : fi->size ) );
 						}
 						break;
 
 						case 6:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							if ( is_dc_lower == true )
-							{
-								int out = swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->data_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->data_checksum );
 
-								if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
-								{
-									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llx", ( ( fileinfo * )lvi.lParam )->v_data_checksum );
-								}
-							}
-							else
+							if ( fi->v_data_checksum != fi->data_checksum )
 							{
-								int out = swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->data_checksum );
-
-								if ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum )
-								{
-									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llX", ( ( fileinfo * )lvi.lParam )->v_data_checksum );
-								}
+								swprintf_s( buf + out, MAX_PATH - out, ( is_dc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_data_checksum );
 							}
 						}
 						break;
@@ -1429,23 +1411,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 7:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							if ( is_hc_lower == true )
-							{
-								int out = swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->header_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->header_checksum );
 
-								if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
-								{
-									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llx", ( ( fileinfo * )lvi.lParam )->v_header_checksum );
-								}
-							}
-							else
+							if ( fi->v_header_checksum != fi->header_checksum )
 							{
-								int out = swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->header_checksum );
-
-								if ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum )
-								{
-									swprintf_s( buf + out, MAX_PATH - out, L" : 0x%016llX", ( ( fileinfo * )lvi.lParam )->v_header_checksum );
-								}
+								swprintf_s( buf + out, MAX_PATH - out, ( is_hc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_header_checksum );
 							}
 						}
 						break;
@@ -1453,32 +1423,25 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 8:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							if ( is_eh_lower == true )
-							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llx", ( ( fileinfo * )lvi.lParam )->entry_hash );
-							}
-							else
-							{
-								swprintf_s( buf, MAX_PATH, L"0x%016llX", ( ( fileinfo * )lvi.lParam )->entry_hash );
-							}
+							swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->entry_hash );
 						}
 						break;
 
 						case 9:
 						{
-							if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_7 )
+							if ( fi->si->system == WINDOWS_7 )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 7" );
 							}
-							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v2 || ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8v3 )
+							else if ( fi->si->system == WINDOWS_8 || fi->si->system == WINDOWS_8v2 || fi->si->system == WINDOWS_8v3 )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 8" );
 							}
-							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_8_1 )
+							else if ( fi->si->system == WINDOWS_8_1 )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows 8.1" );
 							}
-							else if ( ( ( fileinfo * )lvi.lParam )->si->system == WINDOWS_VISTA )
+							else if ( fi->si->system == WINDOWS_VISTA )
 							{
 								wcscpy_s( buf, MAX_PATH, L"Windows Vista" );
 							}
@@ -1491,7 +1454,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						case 10:
 						{
-							buf = ( ( fileinfo * )lvi.lParam )->si->dbpath;
+							buf = fi->si->dbpath;
 						}
 						break;
 					}
@@ -1511,7 +1474,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					int height = last_rc.bottom - last_rc.top;
 
 					// Normal text position.
-					RECT rc = { 0 };
+					RECT rc;
+					rc.top = 0;
+					rc.left = 0;
 					rc.right = width;
 					rc.bottom = height;
 
@@ -1564,7 +1529,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 
 						// Show red text if our checksums don't match and black for everything else.
-						SetTextColor( hdcMem, RGB( ( ( ( i == 6 && ( ( ( fileinfo * )lvi.lParam )->v_data_checksum != ( ( fileinfo * )lvi.lParam )->data_checksum ) ) || ( i == 7 && ( ( ( fileinfo * )lvi.lParam )->v_header_checksum != ( ( fileinfo * )lvi.lParam )->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
+						SetTextColor( hdcMem, RGB( ( ( ( i == 6 && ( fi->v_data_checksum != fi->data_checksum ) ) || ( i == 7 && ( fi->v_header_checksum != fi->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
 						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCAND );
@@ -1617,24 +1582,33 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			LVITEM lvi = { NULL };
 			lvi.mask = LVIF_PARAM;
 
+			fileinfo *fi = NULL;
+
 			// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
 			for ( int i = 0; i < item_count; ++i )
 			{
 				lvi.iItem = i;
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-				( ( fileinfo * )lvi.lParam )->si->count--;
-
-				// Remove our shared information from the linked list if there's no more items for this database.
-				if ( ( ( fileinfo * )lvi.lParam )->si->count == 0 )
+				fi = ( fileinfo * )lvi.lParam;
+				if ( fi != NULL )
 				{
-					free( ( ( fileinfo * )lvi.lParam )->si );
-				}
+					if ( fi->si != NULL )
+					{
+						fi->si->count--;
 
-				// First free the filename pointer.
-				free( ( ( fileinfo * )lvi.lParam )->filename );
-				// Then free the fileinfo structure.
-				free( ( fileinfo * )lvi.lParam );
+						// Remove our shared information from the linked list if there's no more items for this database.
+						if ( fi->si->count == 0 )
+						{
+							free( fi->si );
+						}
+					}
+
+					// First free the filename pointer.
+					free( fi->filename );
+					// Then free the fileinfo structure.
+					free( fi );
+				}
 			}
 
 			// Delete our image object.
@@ -1643,27 +1617,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				delete gdi_image;
 			}
 
-			// Go through the list of blank entries and free any shared info and fileinfo structures.
-			blank_entries_linked_list *be = g_be;
-			blank_entries_linked_list *del_be = NULL;
-			while ( be != NULL )
-			{
-				del_be = be;
-				be = be->next;
+			cleanup_blank_entries();
 
-				del_be->fi->si->count--;
-
-				if ( del_be->fi->si->count == 0 )
-				{
-					free( del_be->fi->si );
-				}
-				free( del_be->fi->filename );
-				free( del_be->fi );
-				free( del_be );
-			}
-
-			// Clean up our fileinfo tree.
-			rbt_delete( fileinfo_tree );
+			cleanup_fileinfo_tree();
 
 			// Since this isn't owned by a window, we need to destroy it.
 			DestroyMenu( g_hMenuSub_context );

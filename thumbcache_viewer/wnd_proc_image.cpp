@@ -17,6 +17,7 @@
 */
 
 #include "globals.h"
+#include <stdio.h>
 
 #define IDT_TIMER		2001
 
@@ -50,7 +51,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			{
 				case VK_HOME:
 				{
-					RECT rc = { 0 };
+					RECT rc;
 					GetClientRect( hWnd, &rc );
 
 					// Center the image.
@@ -135,7 +136,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 				case VK_RIGHT:
 				{
-					RECT rc = { 0 };
+					RECT rc;
 					GetClientRect( hWnd, &rc );
 
 					// See if the control or shift key is down.
@@ -194,7 +195,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 				case VK_DOWN:
 				{
-					RECT rc = { 0 };
+					RECT rc;
 					GetClientRect( hWnd, &rc );
 				
 					// See if the control or shift key is down.
@@ -272,7 +273,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 					drag_rect.y = ( long )top;
 				}
 
-				RECT rc = { 0 };
+				RECT rc;
 				GetClientRect( hWnd, &rc );
 				// This will make sure that the image can't go offscreen by more pixels than its width.
 				float right = rc.right + ( ( gdi_image->GetWidth() / 2 ) * ( scale - 1 ) );
@@ -379,7 +380,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 		case WM_MBUTTONDOWN:
 		{
-			RECT rc = { 0 };
+			RECT rc;
 			GetClientRect( hWnd, &rc );
 
 			// Center the image.
@@ -406,7 +407,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			// Make sure we have an image to draw.
 			if ( gdi_image != NULL )
 			{
-				RECT rc = { 0 };
+				RECT rc;
 				GetClientRect( hWnd, &rc );
 
 				// Create a memory buffer to draw to.
@@ -450,15 +451,15 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 						SetTimer( hWnd, IDT_TIMER, 5000, ( TIMERPROC )TimerProc );
 					}
 
-					wchar_t buf[ 20 ] = { 0 };
-					swprintf_s( buf, 20, L" Zoom level: %4.1fx ", scale );
+					char buf[ 20 ] = { 0 };
+					sprintf_s( buf, 20, " Zoom level: %4.1fx ", scale );
 
 					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont );
 					DeleteObject( ohf );
 
 					SetBkColor( hdcMem, ( COLORREF )GetSysColor( COLOR_MENU ) );
 					SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
-					DrawText( hdcMem, buf, -1, &rc, DT_SINGLELINE );
+					DrawTextA( hdcMem, buf, -1, &rc, DT_SINGLELINE );
 				}
 
 				// Draw our memory buffer to the main device context.
@@ -517,7 +518,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				// This will handle the case when the user moves the main window while the image window is minimized.
 				if ( is_attached == true )
 				{
-					RECT rc = { 0 };
+					RECT rc;
 					GetWindowRect( hWnd, &rc );
 					// Call the WM_MOVING callback with the current position of our window. Set wParam to -1 to tell WM_MOVING that we don't want to calculate the cursor position.
 					SendMessage( hWnd, WM_MOVING, -1, ( LPARAM )&rc );

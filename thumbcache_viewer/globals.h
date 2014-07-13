@@ -37,11 +37,12 @@
 #include <gdiplus.h>
 #include <process.h>
 
-#include "rbt.h"
+#include "dllrbt.h"
 
 #include "resource.h"
 
-#define PROGRAM_CAPTION L"Thumbcache Viewer"
+#define PROGRAM_CAPTION		L"Thumbcache Viewer"
+#define PROGRAM_CAPTION_A	"Thumbcache Viewer"
 
 #define MIN_WIDTH		480
 #define MIN_HEIGHT		320
@@ -70,6 +71,15 @@
 #define WM_PROPAGATE		WM_APP		// Updates the scan window.
 #define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
 #define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
+
+// fileinfo flags.
+#define FIF_TYPE_BMP			1
+#define FIF_TYPE_JPG			2
+#define FIF_TYPE_PNG			4
+#define FIF_IN_TREE				8
+#define FIF_VERIFIED_HEADER		16
+#define FIF_BAD_HEADER			32
+#define FIF_BAD_DATA			64
 
 // Thumbcache header information.
 struct database_header
@@ -174,11 +184,11 @@ struct fileinfo
 	unsigned char flag;					// 1 = bmp, 2 = jpg, 4 = png, 8 = in tree, 16 = verified headers, 32 = bad header, 64 = bad data.
 };
 
-// Temporary list for blank entries.
-struct blank_entries_linked_list
+// Holds duplicate and blank entries.
+struct linked_list
 {
 	fileinfo *fi;						// Refer to the file info so we can add it to the listview.
-	blank_entries_linked_list *next;
+	linked_list *next;
 };
 
 // Multi-file open structure.
@@ -194,7 +204,7 @@ struct pathinfo
 struct save_param
 {
 	wchar_t *filepath;		// Save directory.
-	LPITEMIDLIST lpiidl;	// BrowseForFolder variable when saving files.
+	unsigned char type;		// 0 = full path, 1 = build directory
 	bool save_all;			// Save All = true, Save Selected = false.
 };
 
@@ -216,6 +226,8 @@ unsigned __stdcall save_items( void *pArguments );
 unsigned __stdcall scan_files( void *pArguments );
 bool is_close( int a, int b );
 void update_menus( bool disable_all );
+void cleanup_blank_entries();
+void cleanup_fileinfo_tree();
 
 // These are all variables that are shared among the separate .cpp files.
 
@@ -255,7 +267,6 @@ extern POINT old_pos;				// The old position of gdi_image. Used to calculate the
 
 extern float scale;					// Scale of the image.
 
-extern blank_entries_linked_list *g_be;	// A list to hold all of the blank entries.
 extern bool hide_blank_entries;		// Hide blank entries.
 
 // Scan variables
@@ -263,7 +274,7 @@ extern wchar_t g_filepath[];		// Path to the files and folders to scan.
 extern wchar_t extension_filter[];	// A list of extensions to filter from a file scan.
 extern bool include_folders;		// Include folders in a file scan.
 extern bool show_details;			// Show details in the scan window.
-extern rbt_tree *fileinfo_tree;		// Red-black tree of fileinfo structures.
+extern dllrbt_tree *fileinfo_tree;	// Red-black tree of fileinfo structures.
 
 // Thread variables
 extern bool kill_thread;			// Allow for a clean shutdown.
