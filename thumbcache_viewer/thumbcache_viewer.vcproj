@@ -179,6 +179,30 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lite_msscb.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\lite_mssrch.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\map_entries.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\menus.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\read_esedb.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\read_thumbcache.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\thumbcache_viewer.cpp"
 				>
 			</File>
@@ -191,11 +215,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\wnd_proc_info.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\wnd_proc_main.cpp"
 				>
 			</File>
 			<File
 				RelativePath=".\wnd_proc_scan.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\wnd_proc_view_property.cpp"
 				>
 			</File>
 		</Filter>
@@ -217,7 +249,35 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lite_msscb.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lite_mssrch.h"
+				>
+			</File>
+			<File
+				RelativePath=".\map_entries.h"
+				>
+			</File>
+			<File
+				RelativePath=".\menus.h"
+				>
+			</File>
+			<File
+				RelativePath=".\read_esedb.h"
+				>
+			</File>
+			<File
+				RelativePath=".\read_thumbcache.h"
+				>
+			</File>
+			<File
 				RelativePath=".\resource.h"
+				>
+			</File>
+			<File
+				RelativePath=".\utilities.h"
 				>
 			</File>
 		</Filter>

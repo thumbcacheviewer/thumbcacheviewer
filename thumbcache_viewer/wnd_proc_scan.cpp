@@ -17,6 +17,7 @@
 */
 
 #include "globals.h"
+#include "map_entries.h"
 
 #define BTN_SCAN		1001
 #define BTN_CANCEL		1002
@@ -30,6 +31,7 @@ HWND g_hWnd_path[ 2 ] = { NULL };
 HWND g_hWnd_extensions[ 2 ] = { NULL };
 HWND g_hWnd_chk_folders[ 2 ] = { NULL };
 HWND g_hWnd_hashing[ 2 ] = { NULL };
+HWND g_hWnd_extended_information = NULL;
 HWND g_hWnd_btn_scan = NULL;
 HWND g_hWnd_btn_cancel = NULL;
 HWND g_hWnd_load = NULL;
@@ -39,14 +41,6 @@ HWND g_hWnd_btn_details = NULL;
 HWND g_hWnd_static3 = NULL;
 HWND g_hWnd_static4 = NULL;
 HWND g_hWnd_static5 = NULL;
-
-wchar_t g_filepath[ MAX_PATH ] = { 0 };	// Path to the files and folders to scan.
-wchar_t extension_filter[ MAX_PATH + 2 ] = { 0 };	// A list of extensions to filter from a file scan.
-
-bool include_folders = false;	// Include folders in a file scan.
-bool show_details = false;		// Show details in the scan window.
-
-bool kill_scan = true;			// Stop a file scan.
 
 unsigned char scan_type = 0;	// 0 = scan directories, 1 = scan ese database
 unsigned char tab_index = 0;	// The current tab.
@@ -92,9 +86,11 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			g_hWnd_chk_folders[ 0 ] = CreateWindowA( WC_BUTTONA, "Include Folders", BS_AUTOCHECKBOX | WS_CHILD | WS_TABSTOP | WS_VISIBLE, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 			g_hWnd_chk_folders[ 1 ] = CreateWindowA( WC_BUTTONA, "Include Folders", BS_AUTOCHECKBOX | WS_CHILD | WS_TABSTOP, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 
+			g_hWnd_extended_information = CreateWindowA( WC_BUTTONA, "Retrieve Extended Information", BS_AUTOCHECKBOX | WS_CHILD | WS_TABSTOP, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
+
 			g_hWnd_static3 = CreateWindowA( WC_STATICA, "Current file/folder:", WS_CHILD, 20, 130, rc.right - 40, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_hashing[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
-			g_hWnd_hashing[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
+			g_hWnd_hashing[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
+			g_hWnd_hashing[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 
 			g_hWnd_static4 = CreateWindowA( WC_STATICA, "Current file/folder hash:", WS_CHILD, 20, 175, rc.right - 310, 15, hWnd, NULL, NULL, NULL );
 			g_hWnd_static_hash[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, rc.right - 290, 175, rc.right - 195, 15, hWnd, NULL, NULL, NULL );
@@ -123,6 +119,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SendMessage( g_hWnd_extensions[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_chk_folders[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_chk_folders[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_extended_information, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_hashing[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_hashing[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_static_hash[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
@@ -179,10 +176,10 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				case IDOK:
 				case BTN_SCAN:
 				{
-					if ( kill_scan == false )
+					if ( g_kill_scan == false )
 					{
 						EnableWindow( g_hWnd_btn_scan, FALSE );
-						kill_scan = true;
+						g_kill_scan = true;
 						break;
 					}
 
@@ -199,25 +196,27 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							}
 
 							// Now get our extension filters.
-							length = SendMessage( g_hWnd_extensions[ tab_index ], WM_GETTEXT, MAX_PATH, ( LPARAM )( extension_filter + 1 ) );
+							length = SendMessage( g_hWnd_extensions[ tab_index ], WM_GETTEXT, MAX_PATH, ( LPARAM )( g_extension_filter + 1 ) );
 							if ( length > 0 )
 							{
-								extension_filter[ 0 ] = L'|';				// Append the delimiter to the beginning of the string.
-								extension_filter[ length + 1 ] = L'|';		// Append the delimiter to the end of the string.
-								extension_filter[ length + 2 ] = L'\0';
-								_wcslwr_s( extension_filter, length + 3 );	// Set them to lowercase for later comparison.
+								g_extension_filter[ 0 ] = L'|';					// Append the delimiter to the beginning of the string.
+								g_extension_filter[ length + 1 ] = L'|';		// Append the delimiter to the end of the string.
+								g_extension_filter[ length + 2 ] = L'\0';
+								_wcslwr_s( g_extension_filter, length + 3 );	// Set them to lowercase for later comparison.
 							}
 							else
 							{
-								extension_filter[ 0 ] = L'\0';
+								g_extension_filter[ 0 ] = L'\0';
 							}
 
-							include_folders = SendMessage( g_hWnd_chk_folders[ tab_index ], BM_GETCHECK, 0, 0 ) ? true : false;
+							g_include_folders = SendMessage( g_hWnd_chk_folders[ tab_index ], BM_GETCHECK, 0, 0 ) ? true : false;
+
+							g_retrieve_extended_information = SendMessage( g_hWnd_extended_information, BM_GETCHECK, 0, 0 ) ? true : false;
 
 							scan_type = tab_index;	// scan_type will allow the correct windows to update regardless of the selected tab.
 
 							// If use_scanner == false, then read the ese database.
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &scan_files, ( void * )scan_type, 0, NULL ) );
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &map_entries, ( void * )scan_type, 0, NULL ) );
 						}
 						else
 						{
@@ -235,10 +234,10 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 				case BTN_DETAILS:
 				{
-					show_details = !show_details;
+					g_show_details = !g_show_details;
 
 					// Hiding the details will allow for a faster scan since it doesn't have to update our controls.
-					if ( show_details == true )
+					if ( g_show_details == true )
 					{
 						SendMessageA( g_hWnd_btn_details, WM_SETTEXT, 0, ( LPARAM )"Hide Details \xAB" );
 						ShowWindow( g_hWnd_static3, SW_SHOW );
@@ -265,7 +264,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// Adjust the window height.
 					RECT rc;
 					GetWindowRect( hWnd, &rc );
-					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, MIN_HEIGHT - ( show_details == true ? 25 : 115 ), SWP_NOMOVE );
+					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, MIN_HEIGHT - ( g_show_details == true ? 25 : 115 ), SWP_NOMOVE );
 				}
 				break;
 
@@ -344,6 +343,11 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						ShowWindow( g_hWnd_hashing[ index ], SW_HIDE );
 						ShowWindow( g_hWnd_static_hash[ index ], SW_HIDE );
 						ShowWindow( g_hWnd_static_count[ index ], SW_HIDE );
+
+						if ( index == 1 )
+						{
+							ShowWindow( g_hWnd_extended_information, SW_HIDE );
+						}
 					}
 
 					return FALSE;
@@ -363,15 +367,20 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						ShowWindow( g_hWnd_extensions[ index ], SW_SHOW );
 						ShowWindow( g_hWnd_chk_folders[ index ], SW_SHOW );
 
-						if ( show_details == true )
+						if ( g_show_details == true )
 						{
 							ShowWindow( g_hWnd_hashing[ index ], SW_SHOW );
 							ShowWindow( g_hWnd_static_hash[ index ], SW_SHOW );
 							ShowWindow( g_hWnd_static_count[ index ], SW_SHOW );
 						}
 
+						if ( index == 1 )
+						{
+							ShowWindow( g_hWnd_extended_information, SW_SHOW );
+						}
+
 						// If we're scanning, then enable the scan button. Otherwise, check for a valid path.
-						EnableWindow( g_hWnd_btn_scan, ( kill_scan == false || SendMessage( g_hWnd_path[ index ], WM_GETTEXTLENGTH, 0, 0 ) >= 3 ) ? TRUE : FALSE );
+						EnableWindow( g_hWnd_btn_scan, ( g_kill_scan == false || SendMessage( g_hWnd_path[ index ], WM_GETTEXTLENGTH, 0, 0 ) >= 3 ) ? TRUE : FALSE );
 
 						tab_index = index;
 					}
@@ -391,16 +400,17 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			GetClientRect( hWnd, &rc );
 
 			// Allow our controls to move in relation to the parent window.
-			HDWP hdwp = BeginDeferWindowPos( 13 );
+			HDWP hdwp = BeginDeferWindowPos( 14 );
 			DeferWindowPos( hdwp, g_hWnd_btn_cancel, HWND_TOP, rc.right - 90, rc.bottom - 32, 80, 23, 0 );
 			DeferWindowPos( hdwp, g_hWnd_btn_scan, HWND_TOP, rc.right - 175, rc.bottom - 32, 80, 23, 0 );
 			DeferWindowPos( hdwp, g_hWnd_btn_details, HWND_TOP, 10, rc.bottom - 32, 100, 23, 0 );
 			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 20, 145, rc.right - 40, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 20, 145, rc.right - 40, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 190, 100, 170, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - 120, 100, 100, 20, 0 );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 120, 100, 100, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 290, 100, 100, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 20, 100, rc.right - 145, 20, 0 );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 20, 100, rc.right - 145, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 20, 100, rc.right - 315, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - 50, 55, 30, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 20, 55, rc.right - 75, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 20, 55, rc.right - 75, 20, 0 );
@@ -415,8 +425,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		{
 			// Set the minimum dimensions that the window can be sized to.
 			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT - ( show_details == true ? 25 : 115 );
-			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = MIN_HEIGHT - ( show_details == true ? 25 : 115 );
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT - ( g_show_details == true ? 25 : 115 );
+			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = MIN_HEIGHT - ( g_show_details == true ? 25 : 115 );
 
 			return 0;
 		}
@@ -433,7 +443,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 		case WM_CLOSE:
 		{
-			kill_scan = true;
+			g_kill_scan = true;
 
 			// Reenable the main window.
 			EnableWindow( g_hWnd_main, TRUE );
@@ -443,11 +453,17 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		}
 		break;
 
+		case WM_ALERT:
+		{
+			MessageBoxA( hWnd, ( LPCSTR )lParam, PROGRAM_CAPTION_A, MB_APPLMODAL | ( wParam == 1 ? MB_ICONINFORMATION : MB_ICONWARNING ) | MB_SETFOREGROUND );
+		}
+		break;
+
 		case WM_PROPAGATE:
 		{
 			if ( wParam == 1 )
 			{
-				kill_scan = false;
+				g_kill_scan = false;
 
 				EnableWindow( g_hWnd_path[ 0 ], FALSE );
 				EnableWindow( g_hWnd_path[ 1 ], FALSE );
@@ -456,6 +472,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				EnableWindow( g_hWnd_extensions[ 1 ], FALSE );
 				EnableWindow( g_hWnd_chk_folders[ 0 ], FALSE );
 				EnableWindow( g_hWnd_chk_folders[ 1 ], FALSE );
+				EnableWindow( g_hWnd_extended_information, FALSE );
 
 				// We're scanning. Set the button's text to "Stop".
 				SendMessageA( g_hWnd_btn_scan, WM_SETTEXT, 0, ( LPARAM )"Stop" );
@@ -463,13 +480,13 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			else if ( wParam == 2 )
 			{
 				// Clear the current file info if we finished the scan without stopping.
-				if ( kill_scan == false )
+				if ( g_kill_scan == false )
 				{
 					SendMessage( g_hWnd_hashing[ scan_type ], WM_SETTEXT, 0, 0 );
 					SendMessageA( g_hWnd_static_hash[ scan_type ], WM_SETTEXT, 0, 0 );
 				}
 
-				kill_scan = true;
+				g_kill_scan = true;
 
 				EnableWindow( g_hWnd_path[ 0 ], TRUE );
 				EnableWindow( g_hWnd_path[ 1 ], TRUE );
@@ -478,6 +495,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				EnableWindow( g_hWnd_extensions[ 1 ], TRUE );
 				EnableWindow( g_hWnd_chk_folders[ 0 ], TRUE );
 				EnableWindow( g_hWnd_chk_folders[ 1 ], TRUE );
+				EnableWindow( g_hWnd_extended_information, TRUE );
 
 				// We've stopped/finished scanning. Set the button's text to "Scan".
 				SendMessageA( g_hWnd_btn_scan, WM_SETTEXT, 0, ( LPARAM )"Scan" );
@@ -497,7 +515,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			}
 			else
 			{
-				kill_scan = true;
+				g_kill_scan = true;
 
 				// Reset text information.
 				SendMessage( g_hWnd_hashing[ 0 ], WM_SETTEXT, 0, 0 );
