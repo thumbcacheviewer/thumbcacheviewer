@@ -16,30 +16,17 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Extensible Storage Engine library.
-#pragma comment( lib, "esent.lib" )
-
 #include "globals.h"
+#include "utilities.h"
+#include "read_thumbcache.h"
+#include "menus.h"
+#include "map_entries.h"
 #include "crc64.h"
 
 #include <stdio.h>
 
-#define JET_VERSION 0x0501
-#include <esent.h>
-
-#define FILE_TYPE_BMP	"BM"
-#define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
-#define FILE_TYPE_PNG	"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
-
-#define ntohl( i ) ( ( ( ( unsigned long )( i ) & 0xFF000000 ) >> 24 ) | \
-					 ( ( ( unsigned long )( i ) & 0x00FF0000 ) >> 8 ) | \
-					 ( ( ( unsigned long )( i ) & 0x0000FF00 ) << 8 ) | \
-					 ( ( ( unsigned long )( i ) & 0x000000FF ) << 24 ) )
-
-#define ntohll( i ) ( ( ( __int64 )ntohl( i & 0xFFFFFFFFU ) << 32 ) | ntohl( ( __int64 )( i >> 32 ) ) )
-
 HANDLE shutdown_semaphore = NULL;	// Blocks shutdown while a worker thread is active.
-bool kill_thread = false;			// Allow for a clean shutdown.
+bool g_kill_thread = false;			// Allow for a clean shutdown.
 
 CRITICAL_SECTION pe_cs;				// Queues additional worker threads.
 bool in_thread = false;				// Flag to indicate that we're in a worker thread.
@@ -49,9 +36,11 @@ linked_list *g_be = NULL;			// A list to hold all of the blank entries.
 
 dllrbt_tree *fileinfo_tree = NULL;	// Red-black tree of fileinfo structures.
 
-CLSID clsid;						// Holds a drive's Volume GUID.
-unsigned int file_count = 0;		// Number of files scanned.
-unsigned int match_count = 0;		// Number of files that match an entry hash.
+bool is_close( int a, int b )
+{
+	// See if the distance between two points is less than the snap width.
+	return abs( a - b ) < SNAP_WIDTH;
+}
 
 void Processing_Window( bool enable )
 {
@@ -60,16 +49,16 @@ void Processing_Window( bool enable )
 		SetWindowTextA( g_hWnd_main, "Thumbcache Viewer - Please wait..." );	// Update the window title.
 		EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
 		SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, TRUE, 0 );					// SetCursor only works from the main thread. Set it to an arrow with hourglass.
+		UpdateMenus( UM_DISABLE );												// Disable all processing menu items.
 	}
 	else
 	{
+		UpdateMenus( UM_ENABLE );								// Enable all processing menu items.
 		SendMessage( g_hWnd_main, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
 		EnableWindow( g_hWnd_list, TRUE );						// Allow the listview to be interactive. Also forces a refresh to update the item count column.
 		SetFocus( g_hWnd_list );								// Give focus back to the listview to allow shortcut keys.
 		SetWindowTextA( g_hWnd_main, PROGRAM_CAPTION_A );		// Reset the window title.
 	}
-
-	update_menus( enable );	// Disable all processing menu items.
 }
 
 int dllrbt_compare( void *a, void *b )
@@ -105,6 +94,173 @@ wchar_t *get_filename_from_path( wchar_t *path, unsigned long length )
 	return path + length;
 }
 
+wchar_t *get_sfgao( unsigned long sfgao_flags )
+{
+	wchar_t *ret = NULL;
+	if ( sfgao_flags == 0 )
+	{
+		ret = ( wchar_t * )malloc( sizeof( wchar_t ) * 5 );
+		wmemcpy_s( ret, 5, L"None\0", 5 );
+	}
+
+	int size = _scwprintf( L"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+						( ( sfgao_flags & SFGAO_CANCOPY ) ? L"SFGAO_CANCOPY, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANMOVE ) ? L"SFGAO_CANMOVE, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANLINK ) ? L"SFGAO_CANLINK, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGE ) ? L"SFGAO_STORAGE, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANRENAME ) ? L"SFGAO_CANRENAME, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANDELETE ) ? L"SFGAO_CANDELETE, " : L"" ),
+						( ( sfgao_flags & SFGAO_HASPROPSHEET ) ? L"SFGAO_HASPROPSHEET, " : L"" ),
+						( ( sfgao_flags & SFGAO_DROPTARGET ) ? L"SFGAO_DROPTARGET, " : L"" ),
+						( ( sfgao_flags & SFGAO_CAPABILITYMASK ) ? L"SFGAO_CAPABILITYMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_ENCRYPTED ) ? L"SFGAO_ENCRYPTED, " : L"" ),
+						( ( sfgao_flags & SFGAO_ISSLOW ) ? L"SFGAO_ISSLOW, " : L"" ),
+						( ( sfgao_flags & SFGAO_GHOSTED ) ? L"SFGAO_GHOSTED, " : L"" ),
+						( ( sfgao_flags & SFGAO_LINK ) ? L"SFGAO_LINK, " : L"" ),
+						( ( sfgao_flags & SFGAO_SHARE ) ? L"SFGAO_SHARE, " : L"" ),
+						( ( sfgao_flags & SFGAO_READONLY ) ? L"SFGAO_READONLY, " : L"" ),
+						( ( sfgao_flags & SFGAO_HIDDEN ) ? L"SFGAO_HIDDEN, " : L"" ),
+						( ( sfgao_flags & SFGAO_DISPLAYATTRMASK ) ? L"SFGAO_DISPLAYATTRMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_FILESYSANCESTOR ) ? L"SFGAO_FILESYSANCESTOR, " : L"" ),
+						( ( sfgao_flags & SFGAO_FOLDER ) ? L"SFGAO_FOLDER, " : L"" ),
+						( ( sfgao_flags & SFGAO_FILESYSTEM ) ? L"SFGAO_FILESYSTEM, " : L"" ),
+						( ( sfgao_flags & SFGAO_HASSUBFOLDER ) ? L"SFGAO_HASSUBFOLDER / SFGAO_CONTENTSMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_VALIDATE ) ? L"SFGAO_VALIDATE, " : L"" ),
+						( ( sfgao_flags & SFGAO_REMOVABLE ) ? L"SFGAO_REMOVABLE, " : L"" ),
+						( ( sfgao_flags & SFGAO_COMPRESSED ) ? L"SFGAO_COMPRESSED, " : L"" ),
+						( ( sfgao_flags & SFGAO_BROWSABLE ) ? L"SFGAO_BROWSABLE, " : L"" ),
+						( ( sfgao_flags & SFGAO_NONENUMERATED ) ? L"SFGAO_NONENUMERATED, " : L"" ),
+						( ( sfgao_flags & SFGAO_NEWCONTENT ) ? L"SFGAO_NEWCONTENT, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANMONIKER ) ? L"SFGAO_CANMONIKER / SFGAO_HASSTORAGE / SFGAO_STREAM, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGEANCESTOR ) ? L"SFGAO_STORAGEANCESTOR, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGECAPMASK ) ? L"SFGAO_STORAGECAPMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_PKEYSFGAOMASK ) ? L"SFGAO_PKEYSFGAOMASK" : L"" ) );
+
+	ret = ( wchar_t * )malloc( sizeof( wchar_t ) * ( size + 1 ) );
+
+	size = swprintf_s( ret, size + 1, L"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+						( ( sfgao_flags & SFGAO_CANCOPY ) ? L"SFGAO_CANCOPY, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANMOVE ) ? L"SFGAO_CANMOVE, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANLINK ) ? L"SFGAO_CANLINK, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGE ) ? L"SFGAO_STORAGE, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANRENAME ) ? L"SFGAO_CANRENAME, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANDELETE ) ? L"SFGAO_CANDELETE, " : L"" ),
+						( ( sfgao_flags & SFGAO_HASPROPSHEET ) ? L"SFGAO_HASPROPSHEET, " : L"" ),
+						( ( sfgao_flags & SFGAO_DROPTARGET ) ? L"SFGAO_DROPTARGET, " : L"" ),
+						( ( sfgao_flags & SFGAO_CAPABILITYMASK ) ? L"SFGAO_CAPABILITYMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_ENCRYPTED ) ? L"SFGAO_ENCRYPTED, " : L"" ),
+						( ( sfgao_flags & SFGAO_ISSLOW ) ? L"SFGAO_ISSLOW, " : L"" ),
+						( ( sfgao_flags & SFGAO_GHOSTED ) ? L"SFGAO_GHOSTED, " : L"" ),
+						( ( sfgao_flags & SFGAO_LINK ) ? L"SFGAO_LINK, " : L"" ),
+						( ( sfgao_flags & SFGAO_SHARE ) ? L"SFGAO_SHARE, " : L"" ),
+						( ( sfgao_flags & SFGAO_READONLY ) ? L"SFGAO_READONLY, " : L"" ),
+						( ( sfgao_flags & SFGAO_HIDDEN ) ? L"SFGAO_HIDDEN, " : L"" ),
+						( ( sfgao_flags & SFGAO_DISPLAYATTRMASK ) ? L"SFGAO_DISPLAYATTRMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_FILESYSANCESTOR ) ? L"SFGAO_FILESYSANCESTOR, " : L"" ),
+						( ( sfgao_flags & SFGAO_FOLDER ) ? L"SFGAO_FOLDER, " : L"" ),
+						( ( sfgao_flags & SFGAO_FILESYSTEM ) ? L"SFGAO_FILESYSTEM, " : L"" ),
+						( ( sfgao_flags & SFGAO_HASSUBFOLDER ) ? L"SFGAO_HASSUBFOLDER / SFGAO_CONTENTSMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_VALIDATE ) ? L"SFGAO_VALIDATE, " : L"" ),
+						( ( sfgao_flags & SFGAO_REMOVABLE ) ? L"SFGAO_REMOVABLE, " : L"" ),
+						( ( sfgao_flags & SFGAO_COMPRESSED ) ? L"SFGAO_COMPRESSED, " : L"" ),
+						( ( sfgao_flags & SFGAO_BROWSABLE ) ? L"SFGAO_BROWSABLE, " : L"" ),
+						( ( sfgao_flags & SFGAO_NONENUMERATED ) ? L"SFGAO_NONENUMERATED, " : L"" ),
+						( ( sfgao_flags & SFGAO_NEWCONTENT ) ? L"SFGAO_NEWCONTENT, " : L"" ),
+						( ( sfgao_flags & SFGAO_CANMONIKER ) ? L"SFGAO_CANMONIKER / SFGAO_HASSTORAGE / SFGAO_STREAM, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGEANCESTOR ) ? L"SFGAO_STORAGEANCESTOR, " : L"" ),
+						( ( sfgao_flags & SFGAO_STORAGECAPMASK ) ? L"SFGAO_STORAGECAPMASK, " : L"" ),
+						( ( sfgao_flags & SFGAO_PKEYSFGAOMASK ) ? L"SFGAO_PKEYSFGAOMASK" : L"" ) );
+
+	// Remove any trailing ", ".
+	if ( size > 1 && ret[ size - 1 ] == L' ' )
+	{
+		ret[ size - 2 ] = L'\0';
+	}
+
+	return ret;
+}
+
+wchar_t *get_file_attributes( unsigned long fa_flags )
+{
+	wchar_t *ret = NULL;
+	if ( fa_flags == 0 )
+	{
+		ret = ( wchar_t * )malloc( sizeof( wchar_t ) * 5 );
+		wmemcpy_s( ret, 5, L"None\0", 5 );
+	}
+	else
+	{
+		int size = _scwprintf( L"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+							( ( fa_flags & FILE_ATTRIBUTE_READONLY ) ? L"FILE_ATTRIBUTE_READONLY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_HIDDEN ) ? L"FILE_ATTRIBUTE_HIDDEN, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_SYSTEM ) ? L"FILE_ATTRIBUTE_SYSTEM, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_DIRECTORY ) ? L"FILE_ATTRIBUTE_DIRECTORY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_ARCHIVE ) ? L"FILE_ATTRIBUTE_ARCHIVE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_DEVICE ) ? L"FILE_ATTRIBUTE_DEVICE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_NORMAL ) ? L"FILE_ATTRIBUTE_NORMAL, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_TEMPORARY ) ? L"FILE_ATTRIBUTE_TEMPORARY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_SPARSE_FILE ) ? L"FILE_ATTRIBUTE_SPARSE_FILE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_REPARSE_POINT ) ? L"FILE_ATTRIBUTE_REPARSE_POINT, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_COMPRESSED ) ? L"FILE_ATTRIBUTE_COMPRESSED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_OFFLINE ) ? L"FILE_ATTRIBUTE_OFFLINE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED ) ? L"FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_ENCRYPTED ) ? L"FILE_ATTRIBUTE_ENCRYPTED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_VIRTUAL ) ? L"FILE_ATTRIBUTE_VIRTUAL" : L"" ) );
+
+		ret = ( wchar_t * )malloc( sizeof( wchar_t ) * ( size + 1 ) );
+
+		size = swprintf_s( ret, size + 1, L"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+							( ( fa_flags & FILE_ATTRIBUTE_READONLY ) ? L"FILE_ATTRIBUTE_READONLY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_HIDDEN ) ? L"FILE_ATTRIBUTE_HIDDEN, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_SYSTEM ) ? L"FILE_ATTRIBUTE_SYSTEM, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_DIRECTORY ) ? L"FILE_ATTRIBUTE_DIRECTORY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_ARCHIVE ) ? L"FILE_ATTRIBUTE_ARCHIVE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_DEVICE ) ? L"FILE_ATTRIBUTE_DEVICE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_NORMAL ) ? L"FILE_ATTRIBUTE_NORMAL, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_TEMPORARY ) ? L"FILE_ATTRIBUTE_TEMPORARY, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_SPARSE_FILE ) ? L"FILE_ATTRIBUTE_SPARSE_FILE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_REPARSE_POINT ) ? L"FILE_ATTRIBUTE_REPARSE_POINT, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_COMPRESSED ) ? L"FILE_ATTRIBUTE_COMPRESSED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_OFFLINE ) ? L"FILE_ATTRIBUTE_OFFLINE, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED ) ? L"FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_ENCRYPTED ) ? L"FILE_ATTRIBUTE_ENCRYPTED, " : L"" ),
+							( ( fa_flags & FILE_ATTRIBUTE_VIRTUAL ) ? L"FILE_ATTRIBUTE_VIRTUAL" : L"" ) );
+
+		// Remove any trailing ", ".
+		if ( size > 1 && ret[ size - 1 ] == L' ' )
+		{
+			ret[ size - 2 ] = L'\0';
+		}
+	}
+
+	return ret;
+}
+
+void cleanup_extended_info( extended_info *ei )
+{
+	extended_info *d_ei = NULL;
+	while ( ei != NULL )
+	{
+		d_ei = ei;
+		ei = ei->next;
+
+		if ( d_ei->sei != NULL )
+		{
+			--( d_ei->sei->count );
+
+			// Remove our shared information from the linked list if there's no more items.
+			if ( d_ei->sei->count == 0 )
+			{
+				free( d_ei->sei->windows_property );
+				free( d_ei->sei );
+			}
+		}
+
+		free( d_ei->property_value );
+		free( d_ei );
+	}
+}
+
 void cleanup_blank_entries()
 {
 	// Go through the list of blank entries and free any shared info and fileinfo structures.
@@ -119,13 +275,15 @@ void cleanup_blank_entries()
 		{
 			if ( del_be->fi->si != NULL )
 			{
-				del_be->fi->si->count--;
+				--( del_be->fi->si->count );
 
 				if ( del_be->fi->si->count == 0 )
 				{
 					free( del_be->fi->si );
 				}
 			}
+
+			cleanup_extended_info( del_be->fi->ei );
 
 			free( del_be->fi->filename );
 			free( del_be->fi );
@@ -179,7 +337,7 @@ void create_fileinfo_tree()
 	for ( int i = 0; i < item_count; ++i )
 	{
 		// We don't want to continue scanning if the user cancels the scan.
-		if ( kill_scan == true )
+		if ( g_kill_scan == true )
 		{
 			break;
 		}
@@ -197,11 +355,44 @@ void create_fileinfo_tree()
 			fi_node->fi = fi;
 			fi_node->next = NULL;
 
+			// In Windows Vista, the hash in the filename may not be the same as the cache entry hash.
+			// The cache entry hash algorithm is different from Windows 7 as well.
+			// Use the filename hash instead.
+			if ( fi->si != NULL && fi->si->system == WINDOWS_VISTA )
+			{
+				if ( fi->filename != NULL )
+				{
+					int filename_length = wcslen( fi->filename );
+
+					wchar_t *filename = NULL;
+					wchar_t *filename_end = wcschr( fi->filename, L'.' );	// Check for an extension.
+					if ( filename_end != NULL )
+					{
+						if ( filename_end - fi->filename <= 16 )	// Make sure it's at most 16 digits.
+						{
+							filename = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( filename_end - fi->filename ) + 1 ) );
+							wmemcpy_s( filename, ( filename_end - fi->filename ) + 1, fi->filename, filename_end - fi->filename );
+							filename[ filename_end - fi->filename ] = 0; // Sanity.
+						}
+					}
+					else if ( filename_end == NULL && filename_length <= 16 && filename_length >= 0 )	// Make sure it's at most 16 digits.
+					{
+						filename = _wcsdup( fi->filename );
+					}
+
+					if ( filename != NULL )
+					{
+						fi->mapped_hash = _wcstoui64( filename, NULL, 16 );
+						free( filename );
+					}
+				}
+			}
+
 			// See if our tree has the hash to add the node to.
-			linked_list *ll = ( linked_list * )dllrbt_find( fileinfo_tree, ( void * )fi->entry_hash, true );
+			linked_list *ll = ( linked_list * )dllrbt_find( fileinfo_tree, ( void * )fi->mapped_hash, true );
 			if ( ll == NULL )
 			{
-				if ( dllrbt_insert( fileinfo_tree, ( void * )fi->entry_hash, fi_node ) != DLLRBT_STATUS_OK )
+				if ( dllrbt_insert( fileinfo_tree, ( void * )fi->mapped_hash, fi_node ) != DLLRBT_STATUS_OK )
 				{
 					free( fi_node );
 				}
@@ -220,569 +411,6 @@ void create_fileinfo_tree()
 			}
 		}
 	}
-
-	file_count = 0;		// Reset the file count.
-	match_count = 0;	// Reset the match count.
-}
-
-void update_scan_info( unsigned long long hash, wchar_t *filepath )
-{
-	// Now that we have a hash value to compare, search our fileinfo tree for the same value.
-	linked_list *ll = ( linked_list * )dllrbt_find( fileinfo_tree, ( void * )hash, true );
-	while ( ll != NULL )
-	{
-		if ( ll->fi != NULL )
-		{
-			++match_count;
-
-			// Replace the hash filename with the local filename.
-			free( ll->fi->filename );
-			ll->fi->filename = _wcsdup( filepath );
-		}
-
-		ll = ll->next;
-	}
-
-	++file_count; 
-
-	// Update our scan window with new scan information.
-	if ( show_details == true )
-	{
-		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
-		char buf[ 19 ] = { 0 };
-		sprintf_s( buf, 19, "0x%016llx", hash );
-		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 4, ( LPARAM )buf );
-		sprintf_s( buf, 19, "%lu", file_count );
-		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )buf );
-	}
-}
-
-unsigned long long hash_data( char *data, unsigned long long hash, short length )
-{
-	while ( length-- > 0 )
-	{
-		hash = ( ( ( hash * 0x820 ) + ( *data++ & 0x00000000000000FF ) ) + ( hash >> 2 ) ) ^ hash;
-	}
-
-	return hash;
-}
-
-void hash_file( wchar_t *filepath, wchar_t *extension )
-{
-	// Initial hash value. This value was found in shell32.dll.
-	unsigned long long hash = 0x95E729BA2C37FD21;
-
-	// Hash Volume GUID
-	hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
-
-	// Hash File ID - found in the Master File Table.
-	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL );
-	BY_HANDLE_FILE_INFORMATION bhfi;
-	GetFileInformationByHandle( hFile, &bhfi );
-	CloseHandle( hFile );
-	unsigned long long file_id = bhfi.nFileIndexHigh;
-	file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
-	
-	hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
-
-	// Hash Wide Character File Extension
-	hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
-
-	// Hash Last Modified DOS Time
-	unsigned short fat_date;
-	unsigned short fat_time;
-	FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
-	unsigned int dos_time = fat_date;
-	dos_time = ( dos_time << 16 ) | fat_time;
-
-	hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
-
-	update_scan_info( hash, filepath );
-}
-
-void traverse_directory( wchar_t *path )
-{
-	// We don't want to continue scanning if the user cancels the scan.
-	if ( kill_scan == true )
-	{
-		return;
-	}
-
-	// Set the file path to search for all files/folders in the current directory.
-	wchar_t filepath[ MAX_PATH ];
-	swprintf_s( filepath, MAX_PATH, L"%s\\*", path );
-
-	WIN32_FIND_DATA FindFileData;
-	HANDLE hFind = FindFirstFileEx( ( LPCWSTR )filepath, FindExInfoStandard, &FindFileData, FindExSearchNameMatch, NULL, 0 );
-	if ( hFind != INVALID_HANDLE_VALUE ) 
-	{
-		do
-		{
-			if ( kill_scan == true )
-			{
-				break;	// We need to close the find file handle.
-			}
-
-			wchar_t next_path[ MAX_PATH ];
-
-			// See if the file is a directory.
-			if ( ( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
-			{
-				// Go through all directories except "." and ".." (current and parent)
-				if ( ( wcscmp( FindFileData.cFileName, L"." ) != 0 ) && ( wcscmp( FindFileData.cFileName, L".." ) != 0 ) )
-				{
-					// Move to the next directory.
-					swprintf_s( next_path, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
-
-					traverse_directory( next_path );
-
-					// Only hash folders if enabled.
-					if ( include_folders == true )
-					{
-						hash_file( next_path, L"" );
-					}
-				}
-			}
-			else
-			{
-				// See if the file's extension is in our filter. Go to the next file if it's not.
-				wchar_t *ext = get_extension_from_filename( FindFileData.cFileName, wcslen( FindFileData.cFileName ) );
-				if ( extension_filter[ 0 ] != 0 )
-				{
-					// Do a case-insensitive substring search for the extension.
-					int ext_length = wcslen( ext );
-					wchar_t *temp_ext = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ext_length + 3 ) );
-					for ( int i = 0; i < ext_length; ++i )
-					{
-						temp_ext[ i + 1 ] = towlower( ext[ i ] );
-					}
-					temp_ext[ 0 ] = L'|';				// Append the delimiter to the beginning of the string.
-					temp_ext[ ext_length + 1 ] = L'|';	// Append the delimiter to the end of the string.
-					temp_ext[ ext_length + 2 ] = L'\0';
-
-					if ( wcsstr( extension_filter, temp_ext ) == NULL )
-					{
-						free( temp_ext );
-						continue;
-					}
-
-					free( temp_ext );
-				}
-
-				swprintf_s( next_path, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
-
-				hash_file( next_path, ext );
-			}
-		}
-		while ( FindNextFile( hFind, &FindFileData ) != 0 );	// Go to the next file.
-
-		FindClose( hFind );	// Close the find file handle.
-	}
-}
-
-// The Microsoft Jet Database Engine seems to have a lot of annoying quirks/compatibility issues.
-// The directory scanner is a nice compliment should this function not work 100%.
-// Ideally, the database being scanned should be done with the same esent.dll that was used to create it.
-// If there are issues with the database, make a copy and use esentutl.exe to fix it.
-void traverse_ese_database()
-{
-	JET_INSTANCE instance = JET_instanceNil;
-	JET_SESID sesid = JET_sesidNil;
-	JET_DBID dbid = 0;
-	JET_TABLEID tableid = JET_tableidNil;
-	JET_ERR err = JET_errSuccess;
-
-	JET_COLUMNDEF thumbnail_cache_id_column = { 0 }, item_path_display_column = { 0 }, file_extension_column = { 0 }, file_attributes_column = { 0 };
-
-	JET_RETRIEVECOLUMN rc[ 4 ] = { 0 };
-
-	char *ascii_filepath = NULL;
-
-	unsigned long long thumbnail_cache_id = 0;
-	char *item_path_display = NULL;
-	char *file_extension = NULL;
-	DWORD file_attributes = 0;
-
-	unsigned long long hash = 0;
-
-	unsigned long ulUpdate = 0, cbPageSize = 0;
-
-	char *partial_header = NULL;
-	DWORD read = 0;
-
-	char error[ 1024 ] = { 0 };
-	int error_offset = 0;
-	unsigned char error_state = 0;
-
-	// JetGetDatabaseFileInfo for Windows Vista doesn't seem to like weird page sizes so we'll get it manually.
-	HANDLE hFile = CreateFile( g_filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-	if ( hFile != INVALID_HANDLE_VALUE )
-	{
-		partial_header = ( char * )malloc( sizeof( char ) * 512 );
-
-		ReadFile( hFile, partial_header, sizeof( char ) * 512, &read, NULL );
-
-		CloseHandle( hFile );
-	}
-
-	// Make sure we got enough of the header and it has the magic identifier (0x89ABCDEF) for an ESE database.
-	if ( read < 512 || partial_header == NULL || memcmp( partial_header + 4, "\xEF\xCD\xAB\x89", sizeof( unsigned long ) ) != 0 )
-	{
-		MessageBoxA( g_hWnd_scan, "The file is not an ESE database or has been corrupted.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-		goto CLEANUP;
-	}
-
-	memcpy_s( &ulUpdate, sizeof( unsigned long ), partial_header + 0xE8, sizeof( unsigned long ) );		// Revision number
-	memcpy_s( &cbPageSize, sizeof( unsigned long ), partial_header + 0xEC, sizeof( unsigned long ) );	// Page size
-
-	// The following Jet functions don't have Unicode support on XP (our minimum compatibility) or below.
-	// Putting the database in the root directory (along with a Unicode filename) would get around the issue.
-	int filepath_length = WideCharToMultiByte( CP_ACP, 0, g_filepath, -1, NULL, 0, NULL, NULL );
-	ascii_filepath = ( char * )malloc( sizeof( char ) * filepath_length ); // Size includes the null character.
-	WideCharToMultiByte( CP_ACP, 0, g_filepath, -1, ascii_filepath, filepath_length, NULL, NULL );
-
-	// Disable event logging.
-	err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramNoInformationEvent, true, NULL ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-	// Don't generate recovery files.
-	err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramRecovery, NULL, "Off" ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-	// Don't generate any temporary tables.
-	err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramMaxTemporaryTables, 0, NULL ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-
-	// 2KB, 16KB, and 32KB page sizes were added to Windows 7 (0x11) and above.
-	if ( ( err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramDatabasePageSize, cbPageSize, NULL ) ) != JET_errSuccess ) 
-	{
-		// The database engine doesn't like our page size. It's probably from Windows Vista (0x0C) or below.
-		if ( err == JET_errInvalidParameter && ulUpdate >= 0x11 ) { error_offset = sprintf_s( error, 1024, "The Microsoft Jet database engine is not supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows 7 or higher.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	err = JetCreateInstance( &instance, PROGRAM_CAPTION_A ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-	err = JetInit( &instance ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-	err = JetBeginSession( instance, &sesid, 0, 0 ); if ( err != JET_errSuccess ) { goto CLEANUP; }
-
-	if ( ( err = JetAttachDatabase( sesid, ascii_filepath, JET_bitDbReadOnly ) ) != JET_errSuccess )
-	{
-		error_state = 2;	// Don't detach database.
-		if ( err == JET_errDatabaseDirtyShutdown ) { error_offset = sprintf_s( error, 1024, "Please run esentutl.exe to recover or repair the database.\r\n\r\n" ); }
-		else if ( err == JET_errDatabaseInvalidPath || err == JET_errDiskIO || err == JET_errInvalidPath || err == JET_errInvalidSystemPath ) { error_offset = sprintf_s( error, 1024, "The database could not be loaded from its current location.\r\n\r\nTry moving the database into the root directory and ensure that there are no Unicode characters in the path.\r\n\r\n" ); }
-		else if ( err == JET_errReadVerifyFailure ) { error_offset = sprintf_s( error, 1024, "The Microsoft Jet database engine may not be supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows Vista or higher.\r\n\r\n" ); }	// I see this with XP esent.dll.
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetOpenDatabase( sesid, ascii_filepath, NULL, &dbid, JET_bitDbReadOnly ) ) != JET_errSuccess )
-	{
-		error_state = 1;	// Don't close database.
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetOpenTable( sesid, dbid, "SystemIndex_0A", NULL, 0, JET_bitTableReadOnly, &tableid ) ) != JET_errSuccess )
-	{
-		if ( err == JET_errObjectNotFound ) { error_offset = sprintf_s( error, 1024, "The SystemIndex_0A table was not found.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetGetTableColumnInfo( sesid, tableid, "System_ThumbnailCacheId", &thumbnail_cache_id_column, sizeof( thumbnail_cache_id_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( err == JET_errColumnNotFound ) { error_offset = sprintf_s( error, 1024, "The System_ThumbnailCacheId column was not found.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetGetTableColumnInfo( sesid, tableid, "System_ItemPathDisplay", &item_path_display_column, sizeof( item_path_display_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( err == JET_errColumnNotFound ) { error_offset = sprintf_s( error, 1024, "The System_ItemPathDisplay column was not found.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetGetTableColumnInfo( sesid, tableid, "System_FileExtension", &file_extension_column, sizeof( file_extension_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( err == JET_errColumnNotFound ) { error_offset = sprintf_s( error, 1024, "The System_FileExtension column was not found.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	if ( ( err = JetGetTableColumnInfo( sesid, tableid, "System_FileAttributes", &file_attributes_column, sizeof( file_attributes_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( err == JET_errColumnNotFound ) { error_offset = sprintf_s( error, 1024, "The System_FileAttributes column was not found.\r\n\r\n" ); }
-		goto CLEANUP;
-	}
-
-	// Ensure that the values we receive are of the correct size.
-	if ( thumbnail_cache_id_column.cbMax != sizeof( unsigned long long ) || file_attributes_column.cbMax != sizeof( DWORD ) || item_path_display_column.cbMax == 0 ) { goto CLEANUP; }
-
-	item_path_display = ( char * )malloc( sizeof( char ) * ( item_path_display_column.cbMax + 2 ) );
-	memset( item_path_display, 0, sizeof( char ) * ( item_path_display_column.cbMax + 2 ) );
-
-	file_extension = ( char * )malloc( sizeof( char ) * ( file_extension_column.cbMax + 2 ) );
-	memset( file_extension, 0, sizeof( char ) * ( file_extension_column.cbMax + 2 ) );
-
-	// Set up the column info we want to retrieve.
-	rc[ 0 ].columnid = thumbnail_cache_id_column.columnid;
-	rc[ 0 ].pvData = ( void * )&thumbnail_cache_id;
-	rc[ 0 ].cbData = thumbnail_cache_id_column.cbMax;
-	rc[ 0 ].itagSequence = 1;
-
-	rc[ 1 ].columnid = item_path_display_column.columnid;
-	rc[ 1 ].pvData = ( void * )item_path_display;
-	rc[ 1 ].cbData = item_path_display_column.cbMax;
-	rc[ 1 ].itagSequence = 1;
-
-	rc[ 2 ].columnid = file_extension_column.columnid;
-	rc[ 2 ].pvData = ( void * )file_extension;
-	rc[ 2 ].cbData = file_extension_column.cbMax;
-	rc[ 2 ].itagSequence = 1;
-
-	rc[ 3 ].columnid = file_attributes_column.columnid;
-	rc[ 3 ].pvData = ( void * )&file_attributes;
-	rc[ 3 ].cbData = file_attributes_column.cbMax;
-	rc[ 3 ].itagSequence = 1;
-
-	if ( JetMove( sesid, tableid, JET_MoveFirst, 0 ) != JET_errSuccess ) { goto CLEANUP; }
-
-	while ( true )
-	{
-		// We don't want to continue scanning if the user cancels the scan.
-		if ( kill_scan == true )
-		{
-			break;
-		}
-
-		// Retrieve the 4 column values.
-		if ( JetRetrieveColumns( sesid, tableid, rc, 4 ) != JET_errSuccess )
-		{
-			break;
-		}
-
-		// The file path should be an unterminated Unicode string.
-		item_path_display[ rc[ 1 ].cbActual ] = 0;
-		item_path_display[ rc[ 1 ].cbActual + 1 ] = 0;
-
-		// The file extension should be an unterminated Unicode string.
-		file_extension[ rc[ 2 ].cbActual ] = 0;
-		file_extension[ rc[ 2 ].cbActual + 1 ] = 0;
-
-		// Swap the byte order of the hash.
-		hash = ntohll( thumbnail_cache_id );
-
-		// See if the entry is a folder.
-		if ( ( file_attributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
-		{
-			if ( include_folders == false )
-			{
-				if ( JetMove( sesid, tableid, JET_MoveNext, 0 ) != JET_errSuccess )
-				{
-					break;
-				}
-
-				continue;
-			}
-		}
-		else
-		{
-			// See if the file's extension is in our filter. Go to the next entry if it's not.
-			wchar_t *ext = ( wchar_t * )file_extension;
-			if ( extension_filter[ 0 ] != 0 )
-			{
-				// Do a case-insensitive substring search for the extension.
-				int ext_length = wcslen( ext );
-				wchar_t *temp_ext = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ext_length + 3 ) );
-				for ( int i = 0; i < ext_length; ++i )
-				{
-					temp_ext[ i + 1 ] = towlower( ext[ i ] );
-				}
-				temp_ext[ 0 ] = L'|';				// Append the delimiter to the beginning of the string.
-				temp_ext[ ext_length + 1 ] = L'|';	// Append the delimiter to the end of the string.
-				temp_ext[ ext_length + 2 ] = L'\0';
-
-				if ( wcsstr( extension_filter, temp_ext ) == NULL )
-				{
-					free( temp_ext );
-
-					// Move to the next record (column row).
-					if ( JetMove( sesid, tableid, JET_MoveNext, 0 ) != JET_errSuccess )
-					{
-						break;
-					}
-
-					continue;
-				}
-
-				free( temp_ext );
-			}
-		}
-
-		update_scan_info( hash, ( wchar_t * )item_path_display );
-
-		// Move to the next record (column row).
-		if ( JetMove( sesid, tableid, JET_MoveNext, 0 ) != JET_errSuccess )
-		{
-			break;
-		}
-	}
-
-CLEANUP:
-
-	if ( sesid != JET_sesidNil )
-	{
-		if ( tableid != JET_tableidNil )
-		{
-			JetCloseTable( sesid, tableid );
-		}
-
-		if ( error_state < 2 )
-		{
-			if ( error_state < 1 )
-			{
-				JetCloseDatabase( sesid, dbid, JET_bitNil );
-			}
-
-			JetDetachDatabase( sesid, ascii_filepath );	// If ascii_filepath is NULL, then all databases are detached from the session.
-		}
-
-		JetEndSession( sesid, 0 );
-	}
-
-	if ( instance != JET_instanceNil )
-	{
-		JetTerm( instance );
-	}
-
-	free( item_path_display );
-	free( file_extension );
-	free( ascii_filepath );
-	free( partial_header );
-
-	if ( err != JET_errSuccess )
-	{
-		JET_API_PTR error_value = err;
-		// It would be nice to know how big this buffer is supposed to be. It seems to silently fail if it's not big enough...thankfully.
-		if ( JetGetSystemParameter( NULL, JET_sesidNil, JET_paramErrorToString, &error_value, error + error_offset, sizeof( error ) - error_offset ) != JET_errBufferTooSmall )
-		{
-			char *search = strchr( error + error_offset, ',' );
-			if ( search != NULL )
-			{
-				*search = ':';
-			}
-		}
-
-		MessageBoxA( g_hWnd_scan, error, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-	}
-}
-
-unsigned __stdcall scan_files( void *pArguments )
-{
-	// This will block every other thread from entering until the first thread is complete.
-	EnterCriticalSection( &pe_cs );
-
-	SetWindowTextA( g_hWnd_scan, "Map File Paths to Cache Entry Hashes - Please wait..." );	// Update the window title.
-	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, TRUE, 0 );	// SetCursor only works from the main thread. Set it to an arrow with hourglass.
-
-	// 0 = scan directories, 1 = scan ese database
-	unsigned char scan_type = ( unsigned char )pArguments;
-
-	// Disable scan button, enable cancel button.
-	SendMessage( g_hWnd_scan, WM_PROPAGATE, 1, 0 );
-
-	create_fileinfo_tree();
-
-	if ( scan_type == 0 )
-	{
-		// File path will be at least 2 characters. Copy our drive to get the volume GUID.
-		wchar_t drive[ 4 ] = { 0 };
-		wchar_t volume_guid[ 50 ] = { 0 };
-
-		wmemcpy_s( drive, 4, g_filepath, 2 );
-		drive[ 2 ] = L'\\';	// Ensure the drive ends with "\".
-		drive[ 3 ] = L'\0';
-
-		// Get the volume GUID first.
-		if ( GetVolumeNameForVolumeMountPoint( drive, volume_guid, 50 ) == TRUE )
-		{
-			volume_guid[ 48 ] = L'\0';
-			CLSIDFromString( ( LPOLESTR )( volume_guid + 10 ), &clsid );
-
-			traverse_directory( g_filepath );
-		}
-		else
-		{
-			MessageBoxA( g_hWnd_scan, "Volume name could not be found.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-		}
-	}
-	else
-	{
-		traverse_ese_database();
-	}
-
-	InvalidateRect( g_hWnd_list, NULL, TRUE );
-
-	// Update the details.
-	if ( show_details == false )
-	{
-		char msg[ 11 ] = { 0 };
-		sprintf_s( msg, 11, "%lu", file_count );
-		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )msg );
-	}
-
-	// Reset button and text.
-	SendMessage( g_hWnd_scan, WM_PROPAGATE, 2, 0 );
-
-	if ( match_count > 0 )
-	{
-		char msg[ 30 ] = { 0 };
-		sprintf_s( msg, 30, "%d file%s mapped.", match_count, ( match_count > 1 ? "s were" : " was" ) );
-		MessageBoxA( g_hWnd_scan, msg, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
-	}
-	else
-	{
-		MessageBoxA( g_hWnd_scan, "No files were mapped.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
-	}
-
-	SendMessage( g_hWnd_scan, WM_CHANGE_CURSOR, FALSE, 0 );	// Reset the cursor.
-	SetWindowTextA( g_hWnd_scan, "Map File Paths to Cache Entry Hashes" );	// Reset the window title.
-
-	// We're done. Let other threads continue.
-	LeaveCriticalSection( &pe_cs );
-
-	_endthreadex( 0 );
-	return 0;
-}
-
-bool scan_memory( HANDLE hFile, unsigned int &offset )
-{
-	// Allocate a 32 kilobyte chunk of memory to scan. This value is arbitrary.
-	char *buf = ( char * )malloc( sizeof( char ) * 32768 );
-	char *scan = NULL;
-	DWORD read = 0;
-
-	while ( true )
-	{
-		// Begin reading through the database.
-		ReadFile( hFile, buf, sizeof( char ) * 32768, &read, NULL );
-		if ( read <= 4 )
-		{
-			free( buf );
-			return false;
-		}
-
-		// Binary string search. Look for the magic identifier.
-		scan = buf;
-		while ( read-- > 4 && memcmp( scan++, "CMMM", 4 ) != 0 )
-		{
-			++offset;
-		}
-
-		// If it's not found, then we'll keep scanning.
-		if ( read < 4 )
-		{
-			// Adjust the offset back 4 characters (in case we truncated the magic identifier when reading).
-			SetFilePointer( hFile, offset, NULL, FILE_BEGIN );
-			// Keep scanning.
-			continue;
-		}
-
-		break;
-	}
-
-	free( buf );
-	return true;
 }
 
 // This will allow our main thread to continue while secondary threads finish their processing.
@@ -791,7 +419,7 @@ unsigned __stdcall cleanup( void *pArguments )
 	// This semaphore will be released when the thread gets killed.
 	shutdown_semaphore = CreateSemaphore( NULL, 0, 1, NULL );
 
-	kill_thread = true;	// Causes our secondary threads to cease processing and release the semaphore.
+	g_kill_thread = true;	// Causes our secondary threads to cease processing and release the semaphore.
 
 	// Wait for any active threads to complete. 5 second timeout in case we miss the release.
 	WaitForSingleObject( shutdown_semaphore, 5000 );
@@ -800,6 +428,312 @@ unsigned __stdcall cleanup( void *pArguments )
 
 	// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
 	SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
+
+	_endthreadex( 0 );
+	return 0;
+}
+
+unsigned __stdcall copy_items( void *pArguments )
+{
+	// This will block every other thread from entering until the first thread is complete.
+	EnterCriticalSection( &pe_cs );
+
+	in_thread = true;
+
+	Processing_Window( true );
+
+	char type = ( char )pArguments;	// 0 = main list, 1 = extended info list
+
+	HWND hWnd = ( type == 1 ? g_hWnd_list_info : g_hWnd_list );
+
+	LVITEM lvi = { 0 };
+	lvi.mask = LVIF_PARAM;
+	lvi.iItem = -1;	// Set this to -1 so that the LVM_GETNEXTITEM call can go through the list correctly.
+
+	int item_count = SendMessage( hWnd, LVM_GETITEMCOUNT, 0, 0 );
+	int sel_count = SendMessage( hWnd, LVM_GETSELECTEDCOUNT, 0, 0 );
+	
+	bool copy_all = false;
+	if ( item_count == sel_count )
+	{
+		copy_all = true;
+	}
+	else
+	{
+		item_count = sel_count;
+	}
+
+	unsigned int buffer_size = 8192;
+	unsigned int buffer_offset = 0;
+	wchar_t *copy_buffer = ( wchar_t * )malloc( sizeof( wchar_t ) * buffer_size );	// Allocate 8 kilobytes.
+
+	int value_length = 0;
+
+	wchar_t tbuf[ MAX_PATH ];
+	wchar_t *buf = tbuf;
+
+	bool add_newline = false;
+	bool add_tab = false;
+
+	char column_start = ( type == 1 ? 0 : 1 );
+	char column_end = ( type == 1 ? 2 : NUM_COLUMNS );
+
+	fileinfo *fi = NULL;
+	extended_info *ei = NULL;
+
+	// Go through each item, and copy their lParam values.
+	for ( int i = 0; i < item_count; ++i )
+	{
+		// Stop processing and exit the thread.
+		if ( g_kill_thread == true )
+		{
+			break;
+		}
+
+		if ( copy_all == true )
+		{
+			lvi.iItem = i;
+		}
+		else
+		{
+			lvi.iItem = SendMessage( hWnd, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED );
+		}
+
+		SendMessage( hWnd, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+		if ( type == 1 )
+		{
+			ei = ( extended_info * )lvi.lParam;
+
+			if ( ei == NULL || ( ei != NULL && ei->sei == NULL ) )
+			{
+				continue;
+			}
+		}
+		else 
+		{
+			fi = ( fileinfo * )lvi.lParam;
+
+			if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
+			{
+				continue;
+			}
+		}
+
+		add_newline = add_tab = false;
+
+		for ( int j = column_start; j < column_end; ++j )
+		{
+			switch ( j )
+			{
+				case 0:
+				{
+					buf = ei->sei->windows_property;
+					value_length = ( buf != NULL ? wcslen( buf ) : 0 );
+				}
+				break;
+
+				case 1:
+				{
+					buf = ( type == 1 ? ei->property_value : fi->filename );
+					value_length = ( buf != NULL ? wcslen( buf ) : 0 );
+				}
+				break;
+
+				case 2:
+				{
+					buf = tbuf;	// Reset the buffer pointer.
+
+					// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset == true ? fi->header_offset : fi->header_offset / 1024 ) );
+				}
+				break;
+
+				case 3:
+				{
+					unsigned int cache_entry_size = fi->size + ( fi->data_offset - fi->header_offset );
+
+					// Depending on our toggle, output the size in either kilobytes or bytes.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size == true ? cache_entry_size / 1024 : cache_entry_size ) );
+				}
+				break;
+
+				case 4:
+				{
+					// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset == true ? fi->data_offset : fi->data_offset / 1024 ) );
+				}
+				break;
+
+				case 5:
+				{
+					// Depending on our toggle, output the size in either kilobytes or bytes.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size == true ? fi->size / 1024 : fi->size ) );
+				}
+				break;
+
+				case 6:
+				{
+					// Output the hex string in either lowercase or uppercase.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->data_checksum );
+
+					if ( fi->v_data_checksum != fi->data_checksum )
+					{
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_dc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_data_checksum );
+					}
+				}
+				break;
+
+				case 7:
+				{
+					// Output the hex string in either lowercase or uppercase.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->header_checksum );
+
+					if ( fi->v_header_checksum != fi->header_checksum )
+					{
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_hc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_header_checksum );
+					}
+				}
+				break;
+
+				case 8:
+				{
+					// Output the hex string in either lowercase or uppercase.
+					value_length = swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->entry_hash );
+				}
+				break;
+
+				case 9:
+				{
+					if ( fi->si->system == WINDOWS_7 )
+					{
+						buf = L"Windows 7";
+						value_length = 9;
+					}
+					else if ( fi->si->system == WINDOWS_8 || fi->si->system == WINDOWS_8v2 || fi->si->system == WINDOWS_8v3 )
+					{
+						buf = L"Windows 8";
+						value_length = 9;
+					}
+					else if ( fi->si->system == WINDOWS_8_1 )
+					{
+						buf = L"Windows 8.1";
+						value_length = 11;
+					}
+					else if ( fi->si->system == WINDOWS_VISTA )
+					{
+						buf = L"Windows Vista";
+						value_length = 13;
+					}
+					else
+					{
+						buf = L"Unknown";
+						value_length = 7;
+					}
+				}
+				break;
+
+				case 10:
+				{
+					buf = fi->si->dbpath;
+					value_length = wcslen( buf );
+				}
+				break;
+			}
+
+			if ( buf == NULL )
+			{
+				if ( ( ( type != 1 && j == 1 ) || ( type == 1 && j == 0 ) ) )
+				{
+					add_tab = false;
+				}
+
+				continue;
+			}
+
+			if ( ( ( type != 1 && j > 1 ) || ( type == 1 && j > 0 ) ) && add_tab == true )
+			{
+				*( copy_buffer + buffer_offset ) = L'\t';
+				++buffer_offset;
+			}
+
+			add_tab = true;
+
+			while ( buffer_offset + value_length + 3 >= buffer_size )	// Add +3 for \t and \r\n
+			{
+				buffer_size += 8192;
+				wchar_t *realloc_buffer = ( wchar_t * )realloc( copy_buffer, sizeof( wchar_t ) * buffer_size );
+				if ( realloc_buffer == NULL )
+				{
+					goto CLEANUP;
+				}
+
+				copy_buffer = realloc_buffer;
+			}
+			wmemcpy_s( copy_buffer + buffer_offset, buffer_size - buffer_offset, buf, value_length );
+			buffer_offset += value_length;
+
+			add_newline = true;
+		}
+
+		if ( i < item_count - 1 && add_newline == true )	// Add newlines for every item except the last.
+		{
+			*( copy_buffer + buffer_offset ) = L'\r';
+			++buffer_offset;
+			*( copy_buffer + buffer_offset ) = L'\n';
+			++buffer_offset;
+		}
+		else if ( ( i == item_count - 1 && add_newline == false ) && buffer_offset >= 2 )	// If add_newline is false for the last item, then a newline character is in the buffer.
+		{
+			buffer_offset -= 2;	// Ignore the last newline in the buffer.
+		}
+	}
+
+	if ( OpenClipboard( hWnd ) )
+	{
+		EmptyClipboard();
+
+		DWORD len = buffer_offset;
+
+		// Allocate a global memory object for the text.
+		HGLOBAL hglbCopy = GlobalAlloc( GMEM_MOVEABLE, sizeof( wchar_t ) * ( len + 1 ) );
+		if ( hglbCopy != NULL )
+		{
+			// Lock the handle and copy the text to the buffer. lptstrCopy doesn't get freed.
+			wchar_t *lptstrCopy = ( wchar_t * )GlobalLock( hglbCopy );
+			if ( lptstrCopy != NULL )
+			{
+				wmemcpy_s( lptstrCopy, len + 1, copy_buffer, len );
+				lptstrCopy[ len ] = 0; // Sanity
+			}
+
+			GlobalUnlock( hglbCopy );
+
+			if ( SetClipboardData( CF_UNICODETEXT, hglbCopy ) == NULL )
+			{
+				GlobalFree( hglbCopy );	// Only free this Global memory if SetClipboardData fails.
+			}
+
+			CloseClipboard();
+		}
+	}
+
+CLEANUP:
+
+	free( copy_buffer );
+
+	Processing_Window( false );
+
+	// Release the semaphore if we're killing the thread.
+	if ( shutdown_semaphore != NULL )
+	{
+		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+	}
+
+	in_thread = false;
+
+	// We're done. Let other threads continue.
+	LeaveCriticalSection( &pe_cs );
 
 	_endthreadex( 0 );
 	return 0;
@@ -831,7 +765,7 @@ unsigned __stdcall remove_items( void *pArguments )
 		for ( int i = 0; i < item_count; ++i )
 		{
 			// Stop processing and exit the thread.
-			if ( kill_thread == true )
+			if ( g_kill_thread == true )
 			{
 				break;
 			}
@@ -846,7 +780,7 @@ unsigned __stdcall remove_items( void *pArguments )
 			{
 				if ( fi->si != NULL )
 				{
-					fi->si->count--;
+					--( fi->si->count );
 
 					// Remove our shared information from the linked list if there's no more items for this database.
 					if ( fi->si->count == 0 )
@@ -854,6 +788,13 @@ unsigned __stdcall remove_items( void *pArguments )
 						free( fi->si );
 					}
 				}
+
+				// Close the info window if we're removing its fileinfo.
+				if ( fi == g_current_fi )
+				{
+					SendMessage( g_hWnd_info, WM_CLOSE, 0, 0 );
+				}
+				cleanup_extended_info( fi->ei );
 
 				// Free our filename, then fileinfo structure.
 				free( fi->filename );
@@ -885,7 +826,7 @@ unsigned __stdcall remove_items( void *pArguments )
 		for ( int i = 0; i < sel_count; i++ )
 		{
 			// Stop processing and exit the thread.
-			if ( kill_thread == true )
+			if ( g_kill_thread == true )
 			{
 				break;
 			}
@@ -902,7 +843,7 @@ unsigned __stdcall remove_items( void *pArguments )
 				if ( fi->flag & FIF_IN_TREE )
 				{
 					// First find the fileinfo to remove from the fileinfo tree.
-					dllrbt_iterator *itr = dllrbt_find( fileinfo_tree, ( void * )fi->entry_hash, false );
+					dllrbt_iterator *itr = dllrbt_find( fileinfo_tree, ( void * )fi->mapped_hash, false );
 					if ( itr != NULL )
 					{
 						// Head of the linked list.
@@ -930,7 +871,7 @@ unsigned __stdcall remove_items( void *pArguments )
 								{
 									// Reset the head in the tree.
 									( ( node_type * )itr )->val = ( void * )ll;
-									( ( node_type * )itr )->key = ( void * )ll->fi->entry_hash;
+									( ( node_type * )itr )->key = ( void * )ll->fi->mapped_hash;
 								}
 
 								break;
@@ -950,7 +891,7 @@ unsigned __stdcall remove_items( void *pArguments )
 
 				if ( fi->si != NULL )
 				{
-					fi->si->count--;
+					--( fi->si->count );
 
 					// Remove our shared information from the linked list if there's no more items for this database.
 					if ( fi->si->count == 0 )
@@ -958,6 +899,12 @@ unsigned __stdcall remove_items( void *pArguments )
 						free( fi->si );
 					}
 				}
+
+				if ( fi == g_current_fi )
+				{
+					SendMessage( g_hWnd_info, WM_CLOSE, 0, 0 );
+				}
+				cleanup_extended_info( fi->ei );
 				
 				// Free our filename, then fileinfo structure.
 				free( fi->filename );
@@ -1013,7 +960,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 		while ( be != NULL )
 		{
 			// Stop processing and exit the thread.
-			if ( kill_thread == true )
+			if ( g_kill_thread == true )
 			{
 				g_be = be;	// Reset the global blank entries list to free in WM_DESTORY.
 
@@ -1042,7 +989,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 		for ( int i = item_count - 1; i >= 0; --i )
 		{
 			// Stop processing and exit the thread.
-			if ( kill_thread == true )
+			if ( g_kill_thread == true )
 			{
 				break;
 			}
@@ -1112,7 +1059,7 @@ unsigned __stdcall verify_checksums( void *pArguments )
 	for ( int i = 0; i < item_count; ++i )
 	{
 		// Stop processing and exit the thread.
-		if ( kill_thread == true )
+		if ( g_kill_thread == true )
 		{
 			break;
 		}
@@ -1360,7 +1307,7 @@ unsigned __stdcall save_csv( void *pArguments )
 			for ( int i = 0; i < save_items; ++i )
 			{
 				// Stop processing and exit the thread.
-				if ( kill_thread == true )
+				if ( g_kill_thread == true )
 				{
 					break;
 				}
@@ -1546,7 +1493,7 @@ unsigned __stdcall save_items( void *pArguments )
 		for ( int i = 0; i < save_items; ++i )
 		{
 			// Stop processing and exit the thread.
-			if ( kill_thread == true )
+			if ( g_kill_thread == true )
 			{
 				break;
 			}
@@ -1663,503 +1610,6 @@ unsigned __stdcall save_items( void *pArguments )
 	{
 		// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
 		SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
-	}
-
-	in_thread = false;
-
-	// We're done. Let other threads continue.
-	LeaveCriticalSection( &pe_cs );
-
-	_endthreadex( 0 );
-	return 0;
-}
-
-unsigned __stdcall read_database( void *pArguments )
-{
-	// This will block every other thread from entering until the first thread is complete.
-	// Protects our global variables.
-	EnterCriticalSection( &pe_cs );
-
-	in_thread = true;
-
-	Processing_Window( true );
-
-	pathinfo *pi = ( pathinfo * )pArguments;
-	if ( pi != NULL && pi->filepath != NULL )
-	{
-		int fname_length = 0;
-		wchar_t *fname = pi->filepath + pi->offset;
-
-		int filepath_length = wcslen( pi->filepath ) + 1;	// Include NULL character.
-		
-		bool construct_filepath = ( filepath_length > pi->offset && cmd_line == 0 ? false : true );
-
-		wchar_t *filepath = NULL;
-
-		// We're going to open each file in the path info.
-		do
-		{
-			// Stop processing and exit the thread.
-			if ( kill_thread == true )
-			{
-				break;
-			}
-
-			// Construct the filepath for each file.
-			if ( construct_filepath == true )
-			{
-				fname_length = wcslen( fname ) + 1;	// Include '\' character or NULL character
-
-				if ( cmd_line != 0 )
-				{
-					filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * fname_length );
-					wcscpy_s( filepath, fname_length, fname );
-				}
-				else
-				{
-					filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( filepath_length + fname_length ) );
-					swprintf_s( filepath, filepath_length + fname_length, L"%s\\%s", pi->filepath, fname );
-				}
-
-				// Move to the next file name.
-				fname += fname_length;
-			}
-			else	// Copy the filepath.
-			{
-				filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * filepath_length );
-				wcscpy_s( filepath, filepath_length, pi->filepath );
-			}
-
-			// Attempt to open our database file.
-			HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-			if ( hFile != INVALID_HANDLE_VALUE )
-			{
-				shared_info *si = NULL;
-				DWORD read = 0;
-				int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
-
-				database_header dh = { 0 };
-				ReadFile( hFile, &dh, sizeof( database_header ), &read, NULL );
-
-				// Make sure it's a thumbcache database and the stucture was filled correctly.
-				if ( memcmp( dh.magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_header ) )
-				{
-					CloseHandle( hFile );
-					free( filepath );
-
-					if ( cmd_line != 2 ){ MessageBoxA( g_hWnd_main, "The file is not a thumbcache database.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING ); }
-
-					continue;
-				}
-
-				// Set the file pointer to the first possible cache entry. (Should be at an offset equal to the size of the header)
-				// current_position will keep track our our file pointer position before setting the file pointer. (ReadFile sets it as well)
-				unsigned int current_position = ( dh.version != WINDOWS_8v2 ? 24 : 28 );
-
-				bool next_file = false;	// Go to the next database file.
-				unsigned int header_offset = 0;
-
-				// Go through our database and attempt to extract each cache entry.
-				while ( true )
-				{
-					// Stop processing and exit the thread.
-					if ( kill_thread == true )
-					{
-						free( filepath );
-
-						next_file = true;
-						break;
-					}
-
-					// Set the file pointer to the end of the last cache entry.
-					current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
-					if ( current_position == INVALID_SET_FILE_POINTER )
-					{
-						free( filepath );
-
-						if ( cmd_line != 2 ){ MessageBoxA( g_hWnd_main, "Invalid cache entry.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING ); }
-
-						next_file = true;
-						break;
-					}
-
-					void *database_cache_entry = NULL;
-					// Determine the type of database we're working with and store its content in the correct structure.
-					if ( dh.version == WINDOWS_7 )
-					{
-						database_cache_entry = ( database_cache_entry_7 * )malloc( sizeof( database_cache_entry_7 ) );
-						ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_7 ), &read, NULL );
-						
-						// Make sure it's a thumbcache database and the stucture was filled correctly.
-						if ( read != sizeof( database_cache_entry_7 ) )
-						{
-							// EOF reached.
-							free( database_cache_entry );
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-						else if ( memcmp( ( ( database_cache_entry_7 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
-						{
-							free( database_cache_entry );
-
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
-
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								continue;
-							}
-
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-					}
-					else if ( dh.version == WINDOWS_VISTA )
-					{
-						database_cache_entry = ( database_cache_entry_vista * )malloc( sizeof( database_cache_entry_vista ) );
-						ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_vista ), &read, NULL );
-						// Make sure it's a thumbcache database and the stucture was filled correctly.
-						if ( read != sizeof( database_cache_entry_vista ) )
-						{
-							// EOF reached.
-							free( database_cache_entry );
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-						else if ( memcmp( ( ( database_cache_entry_vista * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
-						{
-							free( database_cache_entry );
-
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
-
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								continue;
-							}
-
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-					}
-					else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
-					{
-						database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
-						ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
-						
-						// Make sure it's a thumbcache database and the stucture was filled correctly.
-						if ( read != sizeof( database_cache_entry_8 ) )
-						{
-							// EOF reached.
-							free( database_cache_entry );
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-						else if ( memcmp( ( ( database_cache_entry_8 * )database_cache_entry )->magic_identifier, "CMMM", 4 ) != 0 )
-						{
-							free( database_cache_entry );
-
-							// Walk back to the end of the last cache entry.
-							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
-
-							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
-							{
-								continue;
-							}
-
-							free( filepath );
-
-							next_file = true;
-							break;
-						}
-					}
-					else	// If this is true, then the file isn't from Vista, 7, or 8 and not supported by this program.
-					{
-						free( filepath );
-
-						if ( cmd_line != 2 ){ MessageBoxA( g_hWnd_main, "The file is not supported by this program.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING ); }
-
-						next_file = true;
-						break;
-					}
-
-					// I think this signifies the end of a valid database and everything beyond this is data that's been overwritten.
-					if ( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ) == 0 )
-					{
-						// Skip the header of this entry. If the next position is invalid (which it probably will be), we'll end up scanning.
-						current_position += read;
-						// Free each database entry that we've skipped over.
-						free( database_cache_entry );
-
-						continue;
-					}
-
-					header_offset = current_position;
-
-					// Size of the cache entry.
-					unsigned int cache_entry_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->cache_entry_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->cache_entry_size : ( ( database_cache_entry_8 * )database_cache_entry )->cache_entry_size ) );
-
-					current_position += cache_entry_size;
-
-					// Filename length should be the total number of bytes (excluding the NULL character) that the UTF-16 filename takes up. A realistic limit should be twice the size of MAX_PATH.
-					unsigned int filename_length = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->filename_length : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->filename_length : ( ( database_cache_entry_8 * )database_cache_entry )->filename_length ) );
-
-					// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
-					unsigned int filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * SHRT_MAX ) );
-					
-					// UTF-16 filename. Allocate the filename length plus 6 for the unicode extension and null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
-					wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
-					memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
-					ReadFile( hFile, filename, filename_truncate_length, &read, NULL );
-					if ( read == 0 )
-					{
-						free( filename );
-						free( database_cache_entry );
-						free( filepath );
-						
-						if ( cmd_line != 2 )
-						{
-							char msg[ 49 ] = { 0 };
-							sprintf_s( msg, 49, "Invalid cache entry located at %lu bytes.", current_position );
-							MessageBoxA( g_hWnd_main, msg, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-						}
-
-						next_file = true;
-						break;
-					}
-
-					unsigned int file_position = 0;
-
-					// Adjust our file pointer if we truncated the filename. This really shouldn't happen unless someone tampered with the database, or it became corrupt.
-					if ( filename_length > filename_truncate_length )
-					{
-						// Offset the file pointer and see if we've moved beyond the EOF.
-						file_position = SetFilePointer( hFile, filename_length - filename_truncate_length, 0, FILE_CURRENT );
-						if ( file_position == INVALID_SET_FILE_POINTER )
-						{
-							free( filename );
-							free( database_cache_entry );
-							free( filepath );
-
-							if ( cmd_line != 2 )
-							{
-								char msg[ 49 ] = { 0 };
-								sprintf_s( msg, 49, "Invalid cache entry located at %lu bytes.", current_position );
-								MessageBoxA( g_hWnd_main, msg, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-							}
-							
-							next_file = true;
-							break;
-						}
-					}
-
-					// Padding before the data entry.
-					unsigned int padding_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->padding_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->padding_size : ( ( database_cache_entry_8 * )database_cache_entry )->padding_size ) );
-
-					// This will set our file pointer to the beginning of the data entry.
-					file_position = SetFilePointer( hFile, padding_size, 0, FILE_CURRENT );
-					if ( file_position == INVALID_SET_FILE_POINTER )
-					{
-						free( filename );
-						free( database_cache_entry );
-						free( filepath );
-
-						if ( cmd_line != 2 )
-						{
-							char msg[ 49 ] = { 0 };
-							sprintf_s( msg, 49, "Invalid cache entry located at %lu bytes.", current_position );
-							MessageBoxA( g_hWnd_main, msg, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-						}
-
-						next_file = true;
-						break;
-					}
-
-					// Size of our image.
-					unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_size : ( ( database_cache_entry_8 * )database_cache_entry )->data_size ) );
-
-					// Create a new info structure to send to the listview item's lParam value.
-					fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
-					fi->flag = 0;
-					fi->header_offset = header_offset;
-					fi->data_offset = file_position;
-					fi->size = data_size;
-
-					fi->entry_hash = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) );
-					fi->data_checksum = fi->v_data_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum ) );
-					fi->header_checksum = fi->v_header_checksum = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum ) );
-
-					// Read any data that exists and get its file extension.
-					if ( data_size != 0 )
-					{
-						// Retrieve the data content header. Our longest identifier is 8 bytes.
-						char *buf = ( char * )malloc( sizeof( char ) * 8 );
-						ReadFile( hFile, buf, 8, &read, NULL );
-						if ( read == 0 )
-						{
-							free( buf );
-							free( fi );
-							free( filename );
-							free( database_cache_entry );
-							free( filepath );
-
-							if ( cmd_line != 2 )
-							{
-								char msg[ 49 ] = { 0 };
-								sprintf_s( msg, 49, "Invalid cache entry located at %lu bytes.", current_position );
-								MessageBoxA( g_hWnd_main, msg, PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING );
-							}
-
-							next_file = true;
-							break;
-						}
-
-						// Detect the file extension and copy it into the filename string.
-						if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".bmp", 4 );
-							fi->flag = FIF_TYPE_BMP;
-						}
-						else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".jpg", 4 );
-							fi->flag = FIF_TYPE_JPG;
-						}
-						else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".png", 4 );
-							fi->flag = FIF_TYPE_PNG;
-						}
-						else if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
-						}
-
-						// Free our data buffer.
-						free( buf );
-
-						// This will set our file pointer to the end of the data entry.
-						SetFilePointer( hFile, data_size - 8, 0, FILE_CURRENT );
-					}
-					else	// No data exists.
-					{
-						// Windows Vista thumbcache files should include the extension.
-						if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
-						}
-					}
-
-					fi->filename = filename;	// Gets deleted during shutdown.
-
-					// Do this only once for each database, and only if we have an entry to add to the listview.
-					if ( si == NULL )
-					{
-						// This information is shared between entries within the database.
-						si = ( shared_info * )malloc( sizeof( shared_info ) );
-						si->count = 0;
-						si->system = dh.version;
-						wcscpy_s( si->dbpath, MAX_PATH, filepath );
-					}
-
-					// Increase the number of items for our shared information.
-					si->count++;
-
-					// The operating system and database location is shared among each entry for the database. This will reduce the amount of memory used.
-					fi->si = si;
-
-					// Add blank entries to our blank entries linked list.
-					if ( hide_blank_entries == true && fi->size == 0 )
-					{
-						linked_list *be = ( linked_list * )malloc( sizeof( linked_list ) );
-						be->fi = fi;
-						be->next = g_be;
-
-						g_be = be;
-					}
-					else
-					{
-						// Insert a row into our listview.
-						LVITEM lvi = { NULL };
-						lvi.mask = LVIF_PARAM; // Our listview items will display the text contained the lParam value.
-						lvi.iItem = item_count++;
-						lvi.iSubItem = 0;
-						lvi.lParam = ( LPARAM )fi;
-						SendMessage( g_hWnd_list, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
-					}
-
-					// Free our database cache entry.
-					free( database_cache_entry );
-				}
-				// Close the input file.
-				CloseHandle( hFile );
-
-				if ( next_file == true )
-				{
-					continue;
-				}
-			}
-			else
-			{
-				// If this occurs, then there's something wrong with the user's system.
-				if ( cmd_line != 2 ){ MessageBoxA( g_hWnd_main, "The database file failed to open.", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONWARNING ); }
-			}
-
-			// Free the old filepath.
-			free( filepath );
-		}
-		while ( construct_filepath == true && *fname != L'\0' );
-
-		// Save the files or a CSV if the user specified an output directory through the command-line.
-		if ( pi->output_path != NULL )
-		{
-			if ( pi->type == 0 )	// Save thumbnail images.
-			{
-				save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );
-				save_type->type = 1;	// Build directory. It may not exist.
-				save_type->save_all = true;
-				save_type->filepath = pi->output_path;
-
-				// save_type is freed in the save_items thread.
-				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
-			}
-			else	// Save CSV.
-			{
-				// output_path is freed in save_csv.
-				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )pi->output_path, 0, NULL ) );
-			}
-		}
-
-		free( pi->filepath );
-	}
-	else if ( pi != NULL )	// filepath == NULL
-	{
-		free( pi->output_path );	// Assume output_path is set.
-	}
-
-	free( pi );
-
-	Processing_Window( false );
-
-	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
-	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;

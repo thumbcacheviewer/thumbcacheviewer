@@ -17,27 +17,36 @@
 */
 
 #include "globals.h"
+#include "menus.h"
+#include "read_thumbcache.h"
+
+#include "lite_mssrch.h"
+#include "lite_msscb.h"
 
 // We want to get these objects before the window is shown.
 
 // Object variables
-HWND g_hWnd_main = NULL;	// Handle to our main window.
-HWND g_hWnd_image = NULL;	// Handle to the image window.
-HWND g_hWnd_scan = NULL;	// Handle to our scan window.
-HWND g_hWnd_active = NULL;	// Handle to the active window. Used to handle tab stops.
+HWND g_hWnd_main = NULL;		// Handle to our main window.
+HWND g_hWnd_image = NULL;		// Handle to the image window.
+HWND g_hWnd_scan = NULL;		// Handle to our scan window.
+HWND g_hWnd_info = NULL;		// Handle to our information window.
+HWND g_hWnd_property = NULL;	// Handle to our property window.
+HWND g_hWnd_active = NULL;		// Handle to the active window. Used to handle tab stops.
 
-HFONT hFont = NULL;			// Handle to our font object.
+HFONT hFont = NULL;				// Handle to our font object.
 
-HICON hIcon_bmp = NULL;		// Handle to the system's .bmp icon.
-HICON hIcon_jpg = NULL;		// Handle to the system's .jpg icon.
-HICON hIcon_png = NULL;		// Handle to the system's .png icon.
+HICON hIcon_bmp = NULL;			// Handle to the system's .bmp icon.
+HICON hIcon_jpg = NULL;			// Handle to the system's .jpg icon.
+HICON hIcon_png = NULL;			// Handle to the system's .png icon.
 
-char cmd_line = 0;			// Show the main window and message prompts. -1 = Do nothing, 0 = GUI only, 1 = Command Line and GUI, 2 = Command Line and no GUI (save only).
+char cmd_line = 0;				// Show the main window and message prompts. -1 = Do nothing, 0 = GUI only, 1 = Command Line and GUI, 2 = Command Line and no GUI (save only).
 
 int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 	ULONG_PTR gdiplusToken;
+
+	unsigned char fail_type = 0;
 
 	// Initialize GDI+.
 	Gdiplus::GdiplusStartup( &gdiplusToken, &gdiplusStartupInput, NULL );
@@ -79,7 +88,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !RegisterClassEx( &wcex ) )
 	{
-		MessageBoxA( NULL, "Call to RegisterClassEx failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 1;
 		goto CLEANUP;
 	}
 
@@ -88,7 +97,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !RegisterClassEx( &wcex ) )
 	{
-		MessageBoxA( NULL, "Call to RegisterClassEx failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 1;
 		goto CLEANUP;
 	}
 
@@ -97,7 +106,25 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !RegisterClassEx( &wcex ) )
 	{
-		MessageBoxA( NULL, "Call to RegisterClassEx failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 1;
+		goto CLEANUP;
+	}
+
+	wcex.lpfnWndProc    = InfoWndProc;
+	wcex.lpszClassName  = L"info";
+
+	if ( !RegisterClassEx( &wcex ) )
+	{
+		fail_type = 1;
+		goto CLEANUP;
+	}
+
+	wcex.lpfnWndProc    = PropertyWndProc;
+	wcex.lpszClassName  = L"property";
+
+	if ( !RegisterClassEx( &wcex ) )
+	{
+		fail_type = 1;
 		goto CLEANUP;
 	}
 
@@ -105,7 +132,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !g_hWnd_main )
 	{
-		MessageBoxA( NULL, "Call to CreateWindow failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 2;
 		goto CLEANUP;
 	}
 
@@ -113,7 +140,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !g_hWnd_image )
 	{
-		MessageBoxA( NULL, "Call to CreateWindow failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 2;
 		goto CLEANUP;
 	}
 
@@ -121,7 +148,23 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	if ( !g_hWnd_scan )
 	{
-		MessageBoxA( NULL, "Call to CreateWindow failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+		fail_type = 2;
+		goto CLEANUP;
+	}
+
+	g_hWnd_info = CreateWindow( L"info", L"Extended Information", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_WIDTH ) / 2 ), MIN_WIDTH, MIN_WIDTH, NULL, NULL, NULL, NULL );
+
+	if ( !g_hWnd_info )
+	{
+		fail_type = 2;
+		goto CLEANUP;
+	}
+
+	g_hWnd_property = CreateWindow( L"property", L"Property Value", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_HEIGHT ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_HEIGHT, MIN_HEIGHT, NULL, NULL, NULL, NULL );
+
+	if ( !g_hWnd_property )
+	{
+		fail_type = 2;
 		goto CLEANUP;
 	}
 
@@ -206,7 +249,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				if ( pi->filepath[ 0 ] != NULL )
 				{
 					// filepath will be freed in the thread.
-					CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_database, ( void * )pi, 0, NULL ) );
+					CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL ) );
 				}
 				else
 				{
@@ -257,6 +300,19 @@ CLEANUP:
 
 	// Shutdown GDI+
 	Gdiplus::GdiplusShutdown( gdiplusToken );
+
+	// Unload the modules if they were initialized.
+	UnInitializeMsSrch();
+	UnInitializeMsSCB();
+
+	if ( fail_type == 1 )
+	{
+		MessageBoxA( NULL, "Call to RegisterClassEx failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+	}
+	else if ( fail_type == 2 )
+	{
+		MessageBoxA( NULL, "Call to CreateWindow failed!", PROGRAM_CAPTION_A, MB_ICONWARNING );
+	}
 
 	return ( int )msg.wParam;
 }

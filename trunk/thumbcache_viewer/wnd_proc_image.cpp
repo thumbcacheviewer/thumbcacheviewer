@@ -17,6 +17,8 @@
 */
 
 #include "globals.h"
+#include "utilities.h"
+
 #include <stdio.h>
 
 #define IDT_TIMER		2001

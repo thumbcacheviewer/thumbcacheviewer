@@ -25,6 +25,9 @@
 // Include GDI+ support. We need it to draw .jpg and .png images, but we'll use it for .bmp too.
 #pragma comment( lib, "gdiplus.lib" )
 
+// Extensible Storage Engine library.
+#pragma comment( lib, "esent.lib" )
+
 #define STRICT
 #define WIN32_LEAN_AND_MEAN
 
@@ -37,127 +40,29 @@
 #include <gdiplus.h>
 #include <process.h>
 
-#include "dllrbt.h"
-
 #include "resource.h"
 
 #define PROGRAM_CAPTION		L"Thumbcache Viewer"
 #define PROGRAM_CAPTION_A	"Thumbcache Viewer"
 
-#define MIN_WIDTH		480
-#define MIN_HEIGHT		320
+#define MIN_WIDTH			480
+#define MIN_HEIGHT			320
 
-#define MENU_OPEN		1001
-#define MENU_SAVE_ALL	1002
-#define MENU_SAVE_SEL	1003
-#define MENU_EXPORT		1004
-#define MENU_EXIT		1005
-#define MENU_ABOUT		1006
-#define MENU_SELECT_ALL	1007
-#define MENU_REMOVE_SEL	1008
-#define MENU_HIDE_BLANK	1009
-#define MENU_CHECKSUMS	1010
-#define MENU_SCAN		1011
-
-#define WINDOWS_VISTA	0x14
-#define WINDOWS_7		0x15
-#define WINDOWS_8		0x1A
-#define WINDOWS_8v2		0x1C
-#define WINDOWS_8v3		0x1E
-#define WINDOWS_8_1		0x1F
-
-#define SNAP_WIDTH		10		// The minimum distance at which our windows will attach together.
+#define NUM_COLUMNS			11
 
 #define WM_PROPAGATE		WM_APP		// Updates the scan window.
 #define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
 #define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
+#define WM_ALERT			WM_APP + 3	// Called from threads to display a message box.
 
 // fileinfo flags.
-#define FIF_TYPE_BMP			1
-#define FIF_TYPE_JPG			2
-#define FIF_TYPE_PNG			4
-#define FIF_IN_TREE				8
-#define FIF_VERIFIED_HEADER		16
-#define FIF_BAD_HEADER			32
-#define FIF_BAD_DATA			64
-
-// Thumbcache header information.
-struct database_header
-{
-	char magic_identifier[ 4 ];
-	unsigned int version;
-	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
-};						// Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
-/*
-// Found in WINDOWS_VISTA/7/8 databases.
-struct database_header_entry_info
-{
-	unsigned int first_cache_entry;
-	unsigned int available_cache_entry;
-	unsigned int number_of_cache_entries;
-};
-
-// Found in WINDOWS_8v2 databases.
-struct database_header_entry_info_v2
-{
-	unsigned int unknown;
-	unsigned int first_cache_entry;
-	unsigned int available_cache_entry;
-	unsigned int number_of_cache_entries;
-};
-
-// Found in WINDOWS_8v3/8_1 databases.
-struct database_header_entry_info_v3
-{
-	unsigned int unknown;
-	unsigned int first_cache_entry;
-	unsigned int available_cache_entry;
-};
-*/
-// Window 7 Thumbcache entry.
-struct database_cache_entry_7
-{
-	char magic_identifier[ 4 ];
-	unsigned int cache_entry_size;
-	unsigned long long entry_hash;
-	unsigned int filename_length;
-	unsigned int padding_size;
-	unsigned int data_size;
-	unsigned int unknown;
-	unsigned long long data_checksum;
-	unsigned long long header_checksum;
-};
-
-// Window 8 Thumbcache entry.
-struct database_cache_entry_8
-{
-	char magic_identifier[ 4 ];
-	unsigned int cache_entry_size;
-	unsigned long long entry_hash;
-	unsigned int filename_length;
-	unsigned int padding_size;
-	unsigned int data_size;
-	unsigned int width;
-	unsigned int height;
-	unsigned int unknown;
-	unsigned long long data_checksum;
-	unsigned long long header_checksum;
-};
-
-// Windows Vista Thumbcache entry.
-struct database_cache_entry_vista
-{
-	char magic_identifier[ 4 ];
-	unsigned int cache_entry_size;
-	unsigned long long entry_hash;
-	wchar_t extension[ 4 ];
-	unsigned int filename_length;
-	unsigned int padding_size;
-	unsigned int data_size;
-	unsigned int unknown;
-	unsigned long long data_checksum;
-	unsigned long long header_checksum;
-};
+#define FIF_TYPE_BMP		1
+#define FIF_TYPE_JPG		2
+#define FIF_TYPE_PNG		4
+#define FIF_IN_TREE			8
+#define FIF_VERIFIED_HEADER	16
+#define FIF_BAD_HEADER		32
+#define FIF_BAD_DATA		64
 
 // Holds shared variables among database entries.
 struct shared_info
@@ -168,6 +73,21 @@ struct shared_info
 	unsigned long count;				// Number of directory entries.
 };
 
+struct shared_extended_info
+{
+	wchar_t *windows_property;
+
+	unsigned long count;				// Number of Windows properties.
+};
+
+// Information retrieved from Windows.edb.
+struct extended_info
+{
+	shared_extended_info *sei;		// Shared information between items.
+	wchar_t *property_value;		// Converted data value.
+	extended_info *next;
+};
+
 // This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
 struct fileinfo
 {
@@ -176,8 +96,10 @@ struct fileinfo
 	unsigned long long header_checksum;	// Header checksum
 	unsigned long long v_data_checksum;	// Verified data checksum
 	unsigned long long v_header_checksum;	// Verified header checksum
+	unsigned long long mapped_hash;		// Entry hash or Vista's filename integer representation.
 	wchar_t *filename;					// Name of the database entry.
 	shared_info *si;					// Shared information between items in a database.
+	extended_info *ei;					// Information retrieved from Windows.edb
 	unsigned int header_offset;			// Offset of header.
 	unsigned int data_offset;			// Offset of data.
 	unsigned int size;					// Size of file.
@@ -210,24 +132,12 @@ struct save_param
 
 // Function prototypes
 LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
-
 LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
-VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
-
 LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK PropertyWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
-unsigned __stdcall cleanup( void *pArguments );
-unsigned __stdcall read_database( void *pArguments );
-unsigned __stdcall remove_items( void *pArguments );
-unsigned __stdcall show_hide_items( void *pArguments );
-unsigned __stdcall verify_checksums( void *pArguments );
-unsigned __stdcall save_csv( void *pArguments );
-unsigned __stdcall save_items( void *pArguments );
-unsigned __stdcall scan_files( void *pArguments );
-bool is_close( int a, int b );
-void update_menus( bool disable_all );
-void cleanup_blank_entries();
-void cleanup_fileinfo_tree();
+VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime );
 
 // These are all variables that are shared among the separate .cpp files.
 
@@ -235,7 +145,10 @@ void cleanup_fileinfo_tree();
 extern HWND g_hWnd_main;			// Handle to our main window.
 extern HWND g_hWnd_image;			// Handle to our image window.
 extern HWND g_hWnd_scan;			// Handle to our scan window.
+extern HWND g_hWnd_info;			// Handle to our information window.
+extern HWND g_hWnd_property;		// Handle to our property window.
 extern HWND g_hWnd_list;			// Handle to the listview control.
+extern HWND g_hWnd_list_info;		// Handle to the extended info listview control.
 extern HWND g_hWnd_active;			// Handle to the active window. Used to handle tab stops.
 
 extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
@@ -245,9 +158,6 @@ extern HFONT hFont;					// Handle to the system's message font.
 extern HICON hIcon_bmp;				// Handle to the system's .bmp icon.
 extern HICON hIcon_jpg;				// Handle to the system's .jpg icon.
 extern HICON hIcon_png;				// Handle to the system's .png icon.
-
-extern HMENU g_hMenu;				// Handle to our menu bar.
-extern HMENU g_hMenuSub_context;	// Handle to our context menu.
 
 extern HCURSOR wait_cursor;			// Temporary cursor while processing entries.
 
@@ -267,18 +177,20 @@ extern POINT old_pos;				// The old position of gdi_image. Used to calculate the
 
 extern float scale;					// Scale of the image.
 
+// List variables
 extern bool hide_blank_entries;		// Hide blank entries.
 
-// Scan variables
-extern wchar_t g_filepath[];		// Path to the files and folders to scan.
-extern wchar_t extension_filter[];	// A list of extensions to filter from a file scan.
-extern bool include_folders;		// Include folders in a file scan.
-extern bool show_details;			// Show details in the scan window.
-extern dllrbt_tree *fileinfo_tree;	// Red-black tree of fileinfo structures.
+extern bool is_kbytes_c_offset;		// Toggle the cache entry offset text.
+extern bool is_kbytes_c_size;		// Toggle the cache entry size text.
+extern bool is_kbytes_d_offset;		// Toggle the data offset text.
+extern bool is_kbytes_d_size;		// Toggle the data size text.
+extern bool is_dc_lower;			// Toggle the data checksum text
+extern bool is_hc_lower;			// Toggle the header checksum text.
+extern bool is_eh_lower;			// Toggle the entry hash text.
 
 // Thread variables
-extern bool kill_thread;			// Allow for a clean shutdown.
-extern bool kill_scan;				// Stop a file scan.
+extern bool g_kill_thread;			// Allow for a clean shutdown.
+extern bool g_kill_scan;			// Stop a file scan.
 
 extern bool in_thread;				// Flag to indicate that we're in a worker thread.
 extern bool skip_draw;				// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
