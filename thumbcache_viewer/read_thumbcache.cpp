@@ -308,9 +308,22 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
 					unsigned int filename_truncate_length = min( filename_length, ( sizeof( wchar_t ) * SHRT_MAX ) );
 					
-					// UTF-16 filename. Allocate the filename length plus 6 for the unicode extension and null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
-					wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
-					memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * 6 ) );
+					// UTF-16 filename. Allocate the filename length, any extra extension, 4 for the unicode extension (.xxx), and 1 for the null character. This will get deleted before MainWndProc is destroyed. See WM_DESTROY in MainWndProc.
+					unsigned int filename_end = filename_truncate_length / sizeof( wchar_t );
+					unsigned char extra_extension = 0;
+					if ( dh.version == WINDOWS_VISTA )
+					{
+						// The Vista file extension can be up to 4 characters long and unterminated.
+						extra_extension = wcsnlen( ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
+
+						// Include '.'
+						if ( extra_extension > 0 )
+						{
+							++extra_extension;
+						}
+					}
+					wchar_t *filename = ( wchar_t * )malloc( filename_truncate_length + ( sizeof( wchar_t ) * ( extra_extension + 4 + 1 ) ) );
+					memset( filename, 0, filename_truncate_length + ( sizeof( wchar_t ) * ( extra_extension + 4 + 1 ) ) );
 					ReadFile( hFile, filename, filename_truncate_length, &read, NULL );
 					if ( read == 0 )
 					{
@@ -327,6 +340,14 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 
 						next_file = true;
 						break;
+					}
+
+					// Add the Windows Vista file extension.
+					if ( extra_extension > 0 )
+					{
+						wmemcpy_s( filename + filename_end, 1, L".", 1 );
+						wmemcpy_s( filename + filename_end + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
+						filename_end += extra_extension;
 					}
 
 					unsigned int file_position = 0;
@@ -416,26 +437,36 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							break;
 						}
 
-						// Detect the file extension and copy it into the filename string.
+						// Detect the file type and copy its file extension into the filename string.
 						if ( memcmp( buf, FILE_TYPE_BMP, 2 ) == 0 )			// First 3 bytes
 						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".bmp", 4 );
 							fi->flag = FIF_TYPE_BMP;
+
+							if ( dh.version != WINDOWS_VISTA ||
+							   ( dh.version == WINDOWS_VISTA && _wcsnicmp( ( ( database_cache_entry_vista * )database_cache_entry )->extension, L"bmp", 4 ) != 0 ) )
+							{
+								wmemcpy_s( filename + filename_end, 4, L".bmp", 4 );
+							}
 						}
 						else if ( memcmp( buf, FILE_TYPE_JPEG, 4 ) == 0 )	// First 4 bytes
 						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".jpg", 4 );
 							fi->flag = FIF_TYPE_JPG;
+
+							if ( dh.version != WINDOWS_VISTA ||
+							   ( dh.version == WINDOWS_VISTA && _wcsnicmp( ( ( database_cache_entry_vista * )database_cache_entry )->extension, L"jpg", 4 ) != 0 ) )
+							{
+								wmemcpy_s( filename + filename_end, 4, L".jpg", 4 );
+							}
 						}
 						else if ( memcmp( buf, FILE_TYPE_PNG, 8 ) == 0 )	// First 8 bytes
 						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 4, L".png", 4 );
 							fi->flag = FIF_TYPE_PNG;
-						}
-						else if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )	// If it's a Windows Vista thumbcache file and we can't detect the extension, then use the one given.
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
+
+							if ( dh.version != WINDOWS_VISTA ||
+							   ( dh.version == WINDOWS_VISTA && _wcsnicmp( ( ( database_cache_entry_vista * )database_cache_entry )->extension, L"png", 4 ) != 0 ) )
+							{
+								wmemcpy_s( filename + filename_end, 4, L".png", 4 );
+							}
 						}
 
 						// Free our data buffer.
@@ -443,15 +474,6 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 
 						// This will set our file pointer to the end of the data entry.
 						SetFilePointer( hFile, data_size - 8, 0, FILE_CURRENT );
-					}
-					else	// No data exists.
-					{
-						// Windows Vista thumbcache files should include the extension.
-						if ( dh.version == WINDOWS_VISTA && ( ( database_cache_entry_vista * )database_cache_entry )->extension[ 0 ] != NULL )
-						{
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ), 1, L".", 1 );
-							wmemcpy_s( filename + ( filename_truncate_length / sizeof( wchar_t ) ) + 1, 4, ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
-						}
 					}
 
 					fi->filename = filename;	// Gets deleted during shutdown.

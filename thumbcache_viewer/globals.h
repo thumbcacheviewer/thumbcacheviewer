@@ -59,10 +59,9 @@
 #define FIF_TYPE_BMP		1
 #define FIF_TYPE_JPG		2
 #define FIF_TYPE_PNG		4
-#define FIF_IN_TREE			8
-#define FIF_VERIFIED_HEADER	16
-#define FIF_BAD_HEADER		32
-#define FIF_BAD_DATA		64
+#define FIF_VERIFIED_HEADER	8
+#define FIF_BAD_HEADER		16
+#define FIF_BAD_DATA		32
 
 // Holds shared variables among database entries.
 struct shared_info

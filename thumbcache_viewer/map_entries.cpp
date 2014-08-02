@@ -35,9 +35,47 @@ bool g_show_details = false;						// Show details in the scan window.
 
 bool g_kill_scan = true;							// Stop a file scan.
 
+bool is_win_7_or_higher = true;						// Windows Vista uses a different file hashing algorithm.
+
 CLSID clsid;										// Holds a drive's Volume GUID.
 unsigned int file_count = 0;						// Number of files scanned.
 unsigned int match_count = 0;						// Number of files that match an entry hash.
+
+#define _WIN32_WINNT_WIN7		0x0601
+//#define _WIN32_WINNT_WIN8		0x0602
+//#define _WIN32_WINNT_WINBLUE	0x0603
+
+BOOL IsWindowsVersionOrGreater( WORD wMajorVersion, WORD wMinorVersion, WORD wServicePackMajor )
+{
+	OSVERSIONINFOEXW osvi = { sizeof( osvi ), 0, 0, 0, 0, { 0 }, 0, 0 };
+	DWORDLONG const dwlConditionMask = VerSetConditionMask(
+		VerSetConditionMask(
+		VerSetConditionMask(
+		0, VER_MAJORVERSION, VER_GREATER_EQUAL ),
+		   VER_MINORVERSION, VER_GREATER_EQUAL ),
+		   VER_SERVICEPACKMAJOR, VER_GREATER_EQUAL );
+
+	osvi.dwMajorVersion = wMajorVersion;
+	osvi.dwMinorVersion = wMinorVersion;
+	osvi.wServicePackMajor = wServicePackMajor;
+
+	return VerifyVersionInfoW( &osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR, dwlConditionMask ) != FALSE;
+}
+
+BOOL IsWindows7OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN7 ), LOBYTE( _WIN32_WINNT_WIN7 ), 0 );
+}
+
+/*BOOL IsWindows8OrGreater()
+{
+	return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN8 ), LOBYTE( _WIN32_WINNT_WIN8 ), 0 );
+}
+
+IsWindows8Point1OrGreater()
+{
+	return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINBLUE ), LOBYTE( _WIN32_WINNT_WINBLUE ), 0 );
+}*/
 
 void update_scan_info( unsigned long long hash, wchar_t *filepath )
 {
@@ -102,7 +140,6 @@ unsigned long long hash_data( char *data, unsigned long long hash, short length 
 	return hash;
 }
 
-// I think this may only work on Windows 7.
 void hash_file( wchar_t *filepath, wchar_t *extension )
 {
 	// Initial hash value. This value was found in shell32.dll.
@@ -118,20 +155,24 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 	CloseHandle( hFile );
 	unsigned long long file_id = bhfi.nFileIndexHigh;
 	file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
-	
+
 	hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
 
-	// Hash Wide Character File Extension
-	hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
+	// Windows Vista doesn't hash the file extension or modified DOS time.
+	if ( is_win_7_or_higher == true )
+	{
+		// Hash Wide Character File Extension
+		hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
 
-	// Hash Last Modified DOS Time
-	unsigned short fat_date;
-	unsigned short fat_time;
-	FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
-	unsigned int dos_time = fat_date;
-	dos_time = ( dos_time << 16 ) | fat_time;
+		// Hash Last Modified DOS Time
+		unsigned short fat_date;
+		unsigned short fat_time;
+		FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
+		unsigned int dos_time = fat_date;
+		dos_time = ( dos_time << 16 ) | fat_time;
 
-	hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+		hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+	}
 
 	update_scan_info( hash, filepath );
 }
@@ -459,6 +500,9 @@ unsigned __stdcall map_entries( void *pArguments )
 			volume_guid[ 48 ] = L'\0';
 			CLSIDFromString( ( LPOLESTR )( volume_guid + 10 ), &clsid );
 
+			// Assume anything below Windows 7 is running on Windows Vista.
+			is_win_7_or_higher = ( IsWindows7OrGreater() != FALSE ? true : false );
+
 			traverse_directory( g_filepath );
 		}
 		else
@@ -470,6 +514,8 @@ unsigned __stdcall map_entries( void *pArguments )
 	{
 		traverse_ese_database();
 	}
+
+	cleanup_fileinfo_tree();
 
 	InvalidateRect( g_hWnd_list, NULL, TRUE );
 
