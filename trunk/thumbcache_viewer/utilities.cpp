@@ -348,7 +348,7 @@ void create_fileinfo_tree()
 		fi = ( fileinfo * )lvi.lParam;
 
 		// Don't attempt to insert the fileinfo if it's already in the tree.
-		if ( fi != NULL && !( fi->flag & FIF_IN_TREE ) )
+		if ( fi != NULL )
 		{
 			// Create the node to insert into a linked list.
 			linked_list *fi_node = ( linked_list * )malloc( sizeof( linked_list ) );
@@ -396,18 +396,12 @@ void create_fileinfo_tree()
 				{
 					free( fi_node );
 				}
-				else
-				{
-					fi->flag |= FIF_IN_TREE;
-				}
 			}
 			else	// If a hash exits, insert the node into the linked list.
 			{
 				linked_list *next = ll->next;	// We'll insert the node after the head.
 				fi_node->next = next;
 				ll->next = fi_node;
-
-				fi->flag |= FIF_IN_TREE;
 			}
 		}
 	}
@@ -802,8 +796,6 @@ unsigned __stdcall remove_items( void *pArguments )
 			}
 		}
 
-		cleanup_fileinfo_tree();
-
 		SendMessage( g_hWnd_list, LVM_DELETEALLITEMS, 0, 0 );
 	}
 	else	// Otherwise, we're going to have to go through each selection one at a time. (SLOOOOOW) Start from the end and work our way to the beginning.
@@ -839,56 +831,6 @@ unsigned __stdcall remove_items( void *pArguments )
 
 			if ( fi != NULL )
 			{
-				// Remove the fileinfo from the fileinfo tree if it exists in it.
-				if ( fi->flag & FIF_IN_TREE )
-				{
-					// First find the fileinfo to remove from the fileinfo tree.
-					dllrbt_iterator *itr = dllrbt_find( fileinfo_tree, ( void * )fi->mapped_hash, false );
-					if ( itr != NULL )
-					{
-						// Head of the linked list.
-						linked_list *ll = ( linked_list * )( ( node_type * )itr )->val;
-
-						// Go through each linked list node and remove the one with fi.
-						linked_list *current_node = ll;
-						linked_list *last_node = NULL;
-						while ( current_node != NULL )
-						{
-							if ( current_node->fi == fi )
-							{
-								if ( last_node == NULL )	// Remove head. (current_node == ll)
-								{
-									ll = current_node->next;
-								}
-								else
-								{
-									last_node->next = current_node->next;
-								}
-
-								free( current_node );
-
-								if ( ll != NULL && ll->fi != NULL )
-								{
-									// Reset the head in the tree.
-									( ( node_type * )itr )->val = ( void * )ll;
-									( ( node_type * )itr )->key = ( void * )ll->fi->mapped_hash;
-								}
-
-								break;
-							}
-
-							last_node = current_node;
-							current_node = current_node->next;
-						}
-
-						// If the head of the linked list is NULL, then we can remove the linked list from the fileinfo tree.
-						if ( ll == NULL )
-						{
-							dllrbt_remove( fileinfo_tree, itr );	// Remove the node from the tree. The tree will rebalance itself.
-						}
-					}
-				}
-
 				if ( fi->si != NULL )
 				{
 					--( fi->si->count );

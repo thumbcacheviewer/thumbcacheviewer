@@ -635,7 +635,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.2\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.3\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1360,8 +1360,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						//SetTextColor( hdcMem, RGB( 0xE0, 0xE0, 0xE0 ) );
 						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 
-						// Show red text if our checksums don't match and black for everything else.
-						SetTextColor( hdcMem, RGB( ( ( ( i == 6 && ( fi->v_data_checksum != fi->data_checksum ) ) || ( i == 7 && ( fi->v_header_checksum != fi->header_checksum ) ) ) ? 0xFF : 0x00 ), 0x00, 0x00 ) );
+						// Show red text if our checksums don't match, green text for entries with extended info, and black text for everything else.
+						COLORREF text_color = RGB( 0x00, 0x00, 0x00 );
+						if ( i == 1 && fi->ei != NULL )
+						{
+							text_color = RGB( 0x00, 0x80, 0x00 );
+						}
+						else if ( ( i == 6 && ( fi->v_data_checksum != fi->data_checksum ) ) ||
+								  ( i == 7 && ( fi->v_header_checksum != fi->header_checksum ) ) )
+						{
+							text_color = RGB( 0xFF, 0x00, 0x00 );
+						}
+						SetTextColor( hdcMem, text_color );
 						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS | RIGHT_COLUMNS );
 
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCAND );
@@ -1459,8 +1469,6 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			}
 
 			cleanup_blank_entries();
-
-			cleanup_fileinfo_tree();
 
 			// Since these aren't owned by a window, we need to destroy them.
 			DestroyMenu( g_hMenuSub_context );
