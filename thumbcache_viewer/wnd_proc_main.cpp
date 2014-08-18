@@ -635,7 +635,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.3\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.4\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1231,11 +1231,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 6:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							int out = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->data_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"%016llx" : L"%016llX" ), fi->data_checksum );
 
 							if ( fi->v_data_checksum != fi->data_checksum )
 							{
-								swprintf_s( buf + out, MAX_PATH - out, ( is_dc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_data_checksum );
+								swprintf_s( buf + out, MAX_PATH - out, ( is_dc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
 							}
 						}
 						break;
@@ -1243,11 +1243,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 7:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							int out = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->header_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"%016llx" : L"%016llX" ), fi->header_checksum );
 
 							if ( fi->v_header_checksum != fi->header_checksum )
 							{
-								swprintf_s( buf + out, MAX_PATH - out, ( is_hc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_header_checksum );
+								swprintf_s( buf + out, MAX_PATH - out, ( is_hc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
 							}
 						}
 						break;
@@ -1255,7 +1255,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 8:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->entry_hash );
+							swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"%016llx" : L"%016llX" ), fi->entry_hash );
 						}
 						break;
 

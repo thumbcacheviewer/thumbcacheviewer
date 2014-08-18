@@ -122,10 +122,10 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 	if ( g_show_details == true )
 	{
 		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
-		char buf[ 19 ] = { 0 };
-		sprintf_s( buf, 19, "0x%016llx", hash );
+		char buf[ 17 ] = { 0 };
+		sprintf_s( buf, 17, "%016llx", hash );
 		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 4, ( LPARAM )buf );
-		sprintf_s( buf, 19, "%lu", file_count );
+		sprintf_s( buf, 17, "%lu", file_count );
 		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )buf );
 	}
 }
@@ -269,7 +269,7 @@ void traverse_ese_database()
 	unsigned long file_attributes = 0;
 
 	// Initialize the Jet database session and get column information for later retrieval. SystemIndex_0A and SystemIndex_0P will be opened on success.
-	if ( ( g_err = init_esedb_info( g_filepath ) ) != JET_errSuccess || ( g_err = get_column_info() ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = init_esedb_info( g_filepath ) ) != JET_errSuccess || ( g_err = ( g_revision < 0x14 ? get_column_info() : get_column_info_win8() ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// These are set in get_column_info. Make sure they exist.
 	if ( g_thumbnail_cache_id == NULL )
@@ -329,9 +329,10 @@ void traverse_ese_database()
 
 	if ( ( g_err = JetMove( g_sesid, g_tableid_0A, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	// mssrch.dll is for Windows 7. msscb.dll is for Winows Vista. What does Windows 8 use? Load whichever one we can.
+	// Windows 8+ (database revision >= 0x14) doesn't use compression.
+	// mssrch.dll is for Windows 7. msscb.dll is for Winows Vista. Load whichever one we can.
 	// These dlls will allow us to uncompress certain column's data/text.
-	if ( mssrch_state == MSSRCH_STATE_SHUTDOWN && msscb_state == MSSRCH_STATE_SHUTDOWN )
+	if ( g_revision < 0x14 && mssrch_state == MSSRCH_STATE_SHUTDOWN && msscb_state == MSSRCH_STATE_SHUTDOWN )
 	{
 		// We only need one to load successfully.
 		if ( InitializeMsSrch() == false && InitializeMsSCB() == false )

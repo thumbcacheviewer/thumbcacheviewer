@@ -42,9 +42,11 @@ struct column_info
 
 JET_ERR init_esedb_info( wchar_t *database_filepath );
 JET_ERR open_table( JET_PCSTR szTableName, JET_TABLEID *ptableid );
+JET_ERR get_table_column_info( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef );
 void cleanup_esedb_info();
 
-JET_ERR get_column_info();	// tableid_0A and tableid_0P will be opened on success.
+JET_ERR get_column_info();		// tableid_0A and tableid_0P will be opened on success.
+JET_ERR get_column_info_win8();	// tableid_0A and tableid_0P will be opened on success.
 void build_retrieve_column_array();
 wchar_t *uncompress_value( unsigned char *value, unsigned long value_length );
 void convert_values( extended_info **ei );
@@ -69,6 +71,7 @@ extern column_info *g_thumbnail_cache_id;
 extern column_info *g_file_extension;
 
 extern bool g_use_big_endian;
+extern unsigned long g_revision;
 
 // Internal error states.
 extern int g_error_offset;
