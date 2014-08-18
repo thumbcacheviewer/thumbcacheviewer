@@ -569,11 +569,11 @@ unsigned __stdcall copy_items( void *pArguments )
 				case 6:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->data_checksum );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"%016llx" : L"%016llX" ), fi->data_checksum );
 
 					if ( fi->v_data_checksum != fi->data_checksum )
 					{
-						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_dc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_data_checksum );
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_dc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
 					}
 				}
 				break;
@@ -581,11 +581,11 @@ unsigned __stdcall copy_items( void *pArguments )
 				case 7:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->header_checksum );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"%016llx" : L"%016llX" ), fi->header_checksum );
 
 					if ( fi->v_header_checksum != fi->header_checksum )
 					{
-						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_hc_lower == true ? L" : 0x%016llx" : L" : 0x%016llX" ), fi->v_header_checksum );
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_hc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
 					}
 				}
 				break;
@@ -593,7 +593,7 @@ unsigned __stdcall copy_items( void *pArguments )
 				case 8:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"0x%016llx" : L"0x%016llX" ), fi->entry_hash );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"%016llx" : L"%016llX" ), fi->entry_hash );
 				}
 				break;
 
@@ -1315,35 +1315,35 @@ unsigned __stdcall save_csv( void *pArguments )
 				}
 
 				// See if the next entry can fit in the buffer. If it can't, then we dump the buffer.
-				if ( write_buf_offset + filename_length + dbpath_length + ( 10 * 4 ) + ( 20 * 5 ) + 13 + 31 > size )
+				if ( write_buf_offset + filename_length + dbpath_length + ( 10 * 4 ) + ( 20 * 5 ) + 13 + 21 + 1 > size )
 				{
 					// Dump the buffer.
 					WriteFile( hFile, write_buf, write_buf_offset, &write, NULL );
 					write_buf_offset = 0;
 				}
 
-				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, "\r\n\"%s\",%lu,%lu,%lu,%lu,0x%016llx",
+				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, "\r\n\"%s\",%lu,%lu,%lu,%lu,%016llx",
 											   utf8_filename,
 											   fi->header_offset, fi->size + ( fi->data_offset - fi->header_offset ),
 											   fi->data_offset, fi->size,
 											   fi->data_checksum );
-											  
+
 				if ( fi->v_data_checksum != fi->data_checksum )
 				{
-					write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : 0x%016llx",
+					write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : %016llx",
 											   fi->v_data_checksum );
 				}
 
-				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",0x%016llx",
+				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",%016llx",
 											   fi->header_checksum );
 
 				if ( fi->v_header_checksum != fi->header_checksum )
 				{
-					write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : 0x%016llx",
+					write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, " : %016llx",
 											   fi->v_header_checksum );
 				}
 
-				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",0x%016llx,%s,\"%s\"",
+				write_buf_offset += sprintf_s( write_buf + write_buf_offset, size - write_buf_offset, ",%016llx,%s,\"%s\"",
 											   fi->entry_hash,
 											   system_string,
 											   utf8_dbpath );

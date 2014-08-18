@@ -575,8 +575,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					g_current_fi = fi;
 
-					char chash[ 32 ];
-					sprintf_s( chash, 32, "0x%016llx", fi->mapped_hash );
+					char chash[ 17 ] = { 0 };
+					sprintf_s( chash, 17, "%016llx", fi->mapped_hash );
 					SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, ( LPARAM )chash );
 
 					// Insert a row into our listview.

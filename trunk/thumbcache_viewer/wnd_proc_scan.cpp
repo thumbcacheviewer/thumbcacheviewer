@@ -406,11 +406,11 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			DeferWindowPos( hdwp, g_hWnd_btn_details, HWND_TOP, 10, rc.bottom - 32, 100, 23, 0 );
 			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 20, 145, rc.right - 40, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 20, 145, rc.right - 40, 20, 0 );
-			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 190, 100, 170, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 200, 100, 180, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - 120, 100, 100, 20, 0 );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 290, 100, 100, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 300, 100, 100, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 20, 100, rc.right - 145, 20, 0 );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 20, 100, rc.right - 315, 20, 0 );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 20, 100, rc.right - 325, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - 50, 55, 30, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 20, 55, rc.right - 75, 20, 0 );
 			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 20, 55, rc.right - 75, 20, 0 );

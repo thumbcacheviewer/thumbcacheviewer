@@ -27,6 +27,7 @@
 
 #define JET_coltypUnsignedLong		14
 #define JET_coltypLongLong			15
+#define JET_coltypGUID				16
 #define JET_coltypUnsignedShort		17
 
 // Internal variables. All all freed/reset in cleanup_esedb_info.
@@ -46,6 +47,7 @@ column_info *g_thumbnail_cache_id = NULL;
 column_info *g_file_extension = NULL;
 
 bool g_use_big_endian = true;
+unsigned long g_revision = 0;
 
 // Internal error states.
 int g_error_offset = 0;
@@ -145,6 +147,24 @@ void convert_values( extended_info **ei )
 					}
 					break;
 
+					case JET_coltypShort:
+					case JET_coltypUnsignedShort:
+					{
+						// Handles Type(s): VT_UI2
+
+						unsigned short val = 0;
+						memcpy_s( &val, sizeof( unsigned short ), t_ci->data, sizeof( unsigned short ) );
+
+						format = ( t_ci->column_type == JET_coltypShort ? L"%d" : L"%lu" );
+						buf_count = _scwprintf( format, val );
+						if ( buf_count > 0 )
+						{
+							t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * ( buf_count + 1 ) );
+							swprintf_s( t_ei->property_value, buf_count + 1, format, val );
+						}
+					}
+					break;
+
 					case JET_coltypLong:
 					case JET_coltypUnsignedLong:
 					{
@@ -153,12 +173,12 @@ void convert_values( extended_info **ei )
 						unsigned long val = 0;
 						memcpy_s( &val, sizeof( unsigned long ), t_ci->data, sizeof( unsigned long ) );
 
-						if ( t_ci->Name_byte_length == 42 && wcscmp( t_ci->Name, L"System.FileAttributes" ) == 0 )
+						if ( t_ci->Name_byte_length == 42 && wcscmp( t_ci->Name, L"System_FileAttributes" ) == 0 )
 						{
 							t_ei->property_value = get_file_attributes( val );
 						}
-						else if ( ( t_ci->Name_byte_length == 34 && wcscmp( t_ci->Name, L"System.SFGAOFlags" ) == 0 ) ||
-								  ( t_ci->Name_byte_length == 56 && wcscmp( t_ci->Name, L"System.Link.TargetSFGAOFlags" ) == 0 ) )
+						else if ( ( t_ci->Name_byte_length == 34 && wcscmp( t_ci->Name, L"System_SFGAOFlags" ) == 0 ) ||
+								  ( t_ci->Name_byte_length == 56 && wcscmp( t_ci->Name, L"System_Link_TargetSFGAOFlags" ) == 0 ) )
 						{
 							t_ei->property_value = get_sfgao( val );
 						}
@@ -224,7 +244,7 @@ void convert_values( extended_info **ei )
 						}
 						else
 						{
-							if ( t_ci->Name_byte_length == 22 && wcscmp( t_ci->Name, L"System.Size" ) == 0 )
+							if ( t_ci->Name_byte_length == 22 && wcscmp( t_ci->Name, L"System_Size" ) == 0 )
 							{
 								buf_count = _scwprintf( L"%llu", val );
 								if ( buf_count > 0 )
@@ -235,10 +255,23 @@ void convert_values( extended_info **ei )
 
 								break;
 							}
-							else if ( t_ci->Name_byte_length == 46 && wcscmp( t_ci->Name, L"System.ThumbnailCacheId" ) == 0 )
+							else if ( t_ci->Name_byte_length == 46 && wcscmp( t_ci->Name, L"System_ThumbnailCacheId" ) == 0 )
 							{
-								t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * 19 );
-								swprintf_s( t_ei->property_value, 19, L"0x%016llx", val );
+								t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * 17 );
+								swprintf_s( t_ei->property_value, 17, L"%016llx", val );
+
+								break;
+							}
+							else if ( t_ci->Name_byte_length == 30 && wcscmp( t_ci->Name, L"InvertedOnlyMD5" ) == 0 )
+							{
+								// Output hex values.
+								unsigned long property_value_offset = 0;
+								buf_count = ( ( g_rc_array[ i ].cbActual * 2 ) + 1 );
+								t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * buf_count );
+								for ( unsigned long h = 0; h < g_rc_array[ i ].cbActual; ++h )
+								{
+									property_value_offset += swprintf_s( t_ei->property_value + property_value_offset, buf_count - property_value_offset, L"%02x", t_ci->data[ h ] );
+								}
 
 								break;
 							}
@@ -269,45 +302,87 @@ void convert_values( extended_info **ei )
 					case JET_coltypText:
 					case JET_coltypLongBinary:
 					case JET_coltypLongText:
+					case JET_coltypGUID:
 					{
 						// Handles Type(s): VT_NULL, VT_LPWSTR, ( VT_VECTOR | VT_LPWSTR ), VT_BLOB, anything else from JET_coltypBinary
-						
-						// On Vista, if Type == ( VT_VECTOR | VT_LPWSTR ), then the first 2 bytes (little-endian) = array count?
-						if ( t_ci->JetCompress == true )
+
+						if ( t_ci->column_type == JET_coltypGUID )
 						{
-							// Make a copy first because we may need to reuse t_ci->data and don't want it modified.
-							unsigned char *data_copy = ( unsigned char * )malloc( sizeof( unsigned char ) * g_rc_array[ i ].cbActual );
-							memcpy_s( data_copy, sizeof( unsigned char ) * g_rc_array[ i ].cbActual, t_ci->data, g_rc_array[ i ].cbActual );
+							if ( g_rc_array[ i ].cbActual == 16 )
+							{
+								// Output GUID formatted value.
+								unsigned long val_1 = 0;
+								unsigned short val_2 = 0, val_3 = 0;
 
-							t_ei->property_value = uncompress_value( data_copy, g_rc_array[ i ].cbActual );
+								memcpy_s( &val_1, sizeof( unsigned long ), t_ci->data, sizeof( unsigned long ) );
+								memcpy_s( &val_2, sizeof( unsigned short ), t_ci->data + sizeof( unsigned long ), sizeof( unsigned short ) );
+								memcpy_s( &val_3, sizeof( unsigned short ), t_ci->data + sizeof( unsigned long ) + sizeof( unsigned short ), sizeof( unsigned short ) );
 
-							free( data_copy );
+								buf_count = ( ( g_rc_array[ i ].cbActual * 2 ) + 6 + 1 );
+								t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * buf_count );
+
+								unsigned long property_value_offset = swprintf_s( t_ei->property_value, buf_count, L"{%04x-%02x-%02x-", val_1, val_2, val_3 );
+								for ( unsigned long h = sizeof( unsigned long ) + ( sizeof( unsigned short ) * 2 ); h < g_rc_array[ i ].cbActual; ++h )
+								{
+									if ( h == 10 )
+									{
+										t_ei->property_value[ property_value_offset ] = L'-';
+										++property_value_offset;
+									}
+									property_value_offset += swprintf_s( t_ei->property_value + property_value_offset, buf_count - property_value_offset, L"%02x", t_ci->data[ h ] );
+								}
+								t_ei->property_value[ buf_count - 2 ] = L'}';
+								t_ei->property_value[ buf_count - 1 ] = 0;	// Sanity.
+
+								break;
+							}
+
+							// Fall through to default.
 						}
 						else
 						{
-							t_ei->property_value = ( wchar_t * )malloc( sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ) );	// Include the NULL terminator.
-							memcpy_s( t_ei->property_value, sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ), t_ci->data, g_rc_array[ i ].cbActual );
+							// On Vista, if Type == ( VT_VECTOR | VT_LPWSTR ), then the first 2 bytes (little-endian) = array count?
+							if ( t_ci->JetCompress == true )
+							{
+								// Make a copy first because we may need to reuse t_ci->data and don't want it modified.
+								unsigned char *data_copy = ( unsigned char * )malloc( sizeof( unsigned char ) * g_rc_array[ i ].cbActual );
+								memcpy_s( data_copy, sizeof( unsigned char ) * g_rc_array[ i ].cbActual, t_ci->data, g_rc_array[ i ].cbActual );
 
-							t_ei->property_value[ g_rc_array[ i ].cbActual / sizeof( wchar_t ) ] = 0;	// Sanity.
+								t_ei->property_value = uncompress_value( data_copy, g_rc_array[ i ].cbActual );
+
+								free( data_copy );
+
+								break;
+							}
+							else
+							{
+								if ( t_ci->Name_byte_length == 32 && wcscmp( t_ci->Name, L"InvertedOnlyPids" ) == 0 )
+								{
+									// Output hex values.
+									unsigned long property_value_offset = 0;
+									buf_count = ( ( g_rc_array[ i ].cbActual * 2 ) + 1 );
+									t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * buf_count );
+									for ( unsigned long h = 0; h < g_rc_array[ i ].cbActual; ++h )
+									{
+										property_value_offset += swprintf_s( t_ei->property_value + property_value_offset, buf_count - property_value_offset, L"%02x", t_ci->data[ h ] );
+									}
+
+									break;
+								}
+
+								// Fall through to default.
+							}
 						}
 					}
-					break;
 
-					case JET_coltypShort:
-					case JET_coltypUnsignedShort:
+					default:
 					{
-						// Handles Type(s): VT_UI2
+						// This is usually wchar strings.
 
-						unsigned short val = 0;
-						memcpy_s( &val, sizeof( unsigned short ), t_ci->data, sizeof( unsigned short ) );
+						t_ei->property_value = ( wchar_t * )malloc( sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ) );	// Include the NULL terminator.
+						memcpy_s( t_ei->property_value, sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ), t_ci->data, g_rc_array[ i ].cbActual );
 
-						format = ( t_ci->column_type == JET_coltypShort ? L"%d" : L"%lu" );
-						buf_count = _scwprintf( format, val );
-						if ( buf_count > 0 )
-						{
-							t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * ( buf_count + 1 ) );
-							swprintf_s( t_ei->property_value, buf_count + 1, format, val );
-						}
+						t_ei->property_value[ g_rc_array[ i ].cbActual / sizeof( wchar_t ) ] = 0;	// Sanity.
 					}
 					break;
 				}
@@ -380,6 +455,7 @@ void cleanup_esedb_info()
 	g_column_count = 0;
 
 	g_use_big_endian = true;
+	g_revision = 0;
 
 	// Freed in the loop below.
 	g_item_path_display = NULL;
@@ -447,7 +523,7 @@ JET_ERR init_esedb_info( wchar_t *database_filepath )
 	char *partial_header = NULL;
 	DWORD read = 0;
 
-	unsigned long ulUpdate = 0, cbPageSize = 0;
+	unsigned long cbPageSize = 0;
 
 	if ( database_filepath == NULL )
 	{
@@ -473,11 +549,11 @@ JET_ERR init_esedb_info( wchar_t *database_filepath )
 		goto CLEANUP;
 	}
 
-	memcpy_s( &ulUpdate, sizeof( unsigned long ), partial_header + 0xE8, sizeof( unsigned long ) );		// Revision number
+	memcpy_s( &g_revision, sizeof( unsigned long ), partial_header + 0xE8, sizeof( unsigned long ) );		// Revision number
 	memcpy_s( &cbPageSize, sizeof( unsigned long ), partial_header + 0xEC, sizeof( unsigned long ) );	// Page size
 
-	// Vista uses little-endian
-	if ( ulUpdate == 0x0C )
+	// Vista and 8+ use little-endian
+	if ( g_revision == 0x0C || g_revision >= 0x14 )
 	{
 		g_use_big_endian = false;
 	}
@@ -499,7 +575,7 @@ JET_ERR init_esedb_info( wchar_t *database_filepath )
 	if ( ( g_err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramDatabasePageSize, cbPageSize, NULL ) ) != JET_errSuccess ) 
 	{
 		// The database engine doesn't like our page size. It's probably from Windows Vista (0x0C) or below.
-		if ( g_err == JET_errInvalidParameter && ulUpdate >= 0x11 ) { set_error_message( "The Microsoft Jet database engine is not supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows 7 or higher." ); }
+		if ( g_err == JET_errInvalidParameter && g_revision >= 0x11 ) { set_error_message( "The Microsoft Jet database engine is not supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows 7 or higher." ); }
 		goto CLEANUP;
 	}
 
@@ -540,33 +616,47 @@ JET_ERR open_table( JET_PCSTR szTableName, JET_TABLEID *ptableid )
 	return g_err;
 }
 
+JET_ERR get_table_column_info( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef )
+{
+	if ( ( g_err = JetGetTableColumnInfo( g_sesid, tableid, szColumnName, pcolumndef, sizeof( *pcolumndef ), JET_ColInfo ) ) != JET_errSuccess )
+	{
+		if ( g_err == JET_errColumnNotFound ) { g_error_offset = sprintf_s( g_error, 1024, "The %s column was not found.", szColumnName ); }
+	}
+
+	return g_err;
+}
+
 // Convert the Windows Property to its column name. (Replace '_' with '.')
 char *get_column_name( wchar_t *name, unsigned long name_length )
 {
 	char *column_name = NULL;
-	char *t_cn = NULL;
+	wchar_t *t_cn = NULL;
+
+	t_cn = name;
+	while ( t_cn != NULL && *t_cn != L'\0' )
+	{
+		if ( *t_cn == L'.' )
+		{
+			*t_cn = L'_';
+		}
+
+		++t_cn;
+	}
 
 	column_name = ( char * )malloc( sizeof( char ) * ( name_length + 1 ) );
 
 	wcstombs_s( NULL, column_name, name_length + 1, ( wchar_t * )name, name_length );
 	column_name[ name_length ] = 0;	// Sanity.
 
-	t_cn = column_name;
-	while ( t_cn != NULL && *t_cn != '\0' )
-	{
-		if ( *t_cn == '.' )
-		{
-			*t_cn = '_';
-		}
-
-		++t_cn;
-	}
-
 	return column_name;
 }
 
 // tableid_0A and tableid_0P will be opened on success.
 // g_ci is freed in cleanup_esedb_info().
+// Handles Windows Vista and Windows 7 databases.
+// The Windows Property values are stored in SystemIndex_0A and the list of columns is stored in SystemIndex_0P.
+// We could use MSysObjects to get the list of columns, but SystemIndex_0A contains compression and data type information.
+// In the MSysObjects table, columns with a flag mask of 0x80 or 0x10 (not sure which) causes JetRetrieveColumns in update_scan_info(...) to fail. They aren't listed in SystemIndex_0P.
 JET_ERR get_column_info()
 {
 	long type = 0, docid = 0;
@@ -583,23 +673,9 @@ JET_ERR get_column_info()
 	// This table has a list of Windows Properties and various information about the columns we'll be retrieving.
 	if ( ( g_err = open_table( "SystemIndex_0P", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	if ( ( g_err = JetGetTableColumnInfo( g_sesid, g_tableid_0P, "Name", &name_column, sizeof( name_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The Name column was not found." ); }
-		goto CLEANUP;
-	}
-
-	if ( ( g_err = JetGetTableColumnInfo( g_sesid, g_tableid_0P, "Type", &type_column, sizeof( type_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The MaxSize column was not found." ); }
-		goto CLEANUP;
-	}
-
-	if ( ( g_err = JetGetTableColumnInfo( g_sesid, g_tableid_0P, "JetCompress", &jet_compress_column, sizeof( jet_compress_column ), JET_ColInfo ) ) != JET_errSuccess )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The JetCompress column was not found." ); }
-		goto CLEANUP;
-	}
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "JetCompress", &jet_compress_column ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// Ensure that the values we retrieve are of the correct size.
 	if ( type_column.cbMax != sizeof( long ) ||
@@ -706,19 +782,19 @@ JET_ERR get_column_info()
 
 		last_ci = ci;
 
-		if ( ci->Name_byte_length == 42 && wcscmp( ci->Name, L"System.FileAttributes" ) == 0 )
+		if ( ci->Name_byte_length == 42 && wcscmp( ci->Name, L"System_FileAttributes" ) == 0 )
 		{
 			g_file_attributes = ci;
 		}
-		else if ( ci->Name_byte_length == 40 && wcscmp( ci->Name, L"System.FileExtension" ) == 0 )
+		else if ( ci->Name_byte_length == 40 && wcscmp( ci->Name, L"System_FileExtension" ) == 0 )
 		{
 			g_file_extension = ci;
 		}
-		else if ( ci->Name_byte_length == 44 && wcscmp( ci->Name, L"System.ItemPathDisplay" ) == 0 )
+		else if ( ci->Name_byte_length == 44 && wcscmp( ci->Name, L"System_ItemPathDisplay" ) == 0 )
 		{
 			g_item_path_display = ci;
 		}
-		else if ( ci->Name_byte_length == 46 && wcscmp( ci->Name, L"System.ThumbnailCacheId" ) == 0 )
+		else if ( ci->Name_byte_length == 46 && wcscmp( ci->Name, L"System_ThumbnailCacheId" ) == 0 )
 		{
 			g_thumbnail_cache_id = ci;
 		}
@@ -731,6 +807,227 @@ JET_ERR get_column_info()
 	}
 
 CLEANUP:
+
+	return g_err;
+}
+
+// tableid_0A and tableid_0P will be opened on success.
+// g_ci is freed in cleanup_esedb_info().
+// Handles Windows 8+ databases.
+// The Windows Property values are stored in SystemIndex_PropertyStore and the list of columns is stored in MSysObjects.
+// The values are in little endian and don't appear to be compressed. There is no data type associated with the values.
+JET_ERR get_column_info_win8()
+{
+	short type = 0;
+	long objid = 0, t_objid = 0;
+	JET_COLUMNDEF name_column = { 0 }, type_column = { 0 }, objid_column = { 0 }, system_index_property_store_column = { 0 };
+
+	JET_RETRIEVECOLUMN rc_0P[ 3 ] = { 0 };
+
+	unsigned char *name = NULL;
+
+	bool found_index = false;
+
+	column_info *ci = NULL;
+	column_info *last_ci = NULL;
+
+	g_column_count = 0;
+
+	// This table has a list of Windows Properties and various information about the columns we'll be retrieving.
+	if ( ( g_err = open_table( "MSysObjects", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
+
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = get_table_column_info( g_tableid_0P, "ObjidTable", &objid_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+
+	// Ensure that the values we retrieve are of the correct size.
+	if ( type_column.cbMax != sizeof( short ) ||
+		 objid_column.cbMax != sizeof( long ) ||
+		 name_column.cbMax == 0 )
+	{ g_err = JET_errInvalidColumnType; goto CLEANUP; }
+
+	name = ( unsigned char * )malloc( sizeof( char ) * ( name_column.cbMax + 2 ) ); // Add 2 bytes for a L"\0" to be added.
+
+	// Set up the column info we want to retrieve.
+	rc_0P[ 0 ].columnid = name_column.columnid;
+	rc_0P[ 0 ].pvData = ( void * )name;
+	rc_0P[ 0 ].cbData = name_column.cbMax;
+	rc_0P[ 0 ].itagSequence = 1;
+
+	rc_0P[ 1 ].columnid = type_column.columnid;
+	rc_0P[ 1 ].pvData = ( void * )&type;
+	rc_0P[ 1 ].cbData = type_column.cbMax;
+	rc_0P[ 1 ].itagSequence = 1;
+
+	rc_0P[ 2 ].columnid = objid_column.columnid;
+	rc_0P[ 2 ].pvData = ( void * )&objid;
+	rc_0P[ 2 ].cbData = objid_column.cbMax;
+	rc_0P[ 2 ].itagSequence = 1;
+
+	if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
+
+	while ( true )
+	{
+		// Stop processing and exit the thread.
+		if ( g_kill_scan == true )
+		{
+			break;
+		}
+
+		memset( name, 0, sizeof( char ) * ( name_column.cbMax + 2 ) );
+
+		// Retrieve the 3 column values.
+		if ( ( g_err = JetRetrieveColumns( g_sesid, g_tableid_0P, rc_0P, 3 ) ) != JET_errSuccess )
+		{
+			break;
+		}
+
+		// Look for a table record (type == 1).
+		if ( type == 1 )
+		{
+			// The name should be an unterminated ASCII string. Add L"\0" to the end.
+			name[ rc_0P[ 0 ].cbActual ] = 0;
+			name[ rc_0P[ 0 ].cbActual + 1 ] = 0;
+
+			if ( strcmp( ( const char * )name, "SystemIndex_PropertyStore" ) == 0 )
+			{
+				t_objid = objid;
+				objid = 0;
+				type = 0;
+				found_index = true;
+				break;
+			}
+		}
+
+		// Move to the next record (column row).
+		if ( JetMove( g_sesid, g_tableid_0P, JET_MoveNext, JET_bitNil ) != JET_errSuccess )
+		{
+			break;
+		}
+	}
+
+	if ( found_index == true )
+	{
+		// This table has all of the Windows Properties and their values.
+		if ( ( g_err = open_table( "SystemIndex_PropertyStore", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
+
+		if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
+
+		while ( true )
+		{
+			// Stop processing and exit the thread.
+			if ( g_kill_scan == true )
+			{
+				break;
+			}
+
+			memset( name, 0, sizeof( char ) * ( name_column.cbMax + 2 ) );
+
+			// Retrieve the 3 column values.
+			if ( ( g_err = JetRetrieveColumns( g_sesid, g_tableid_0P, rc_0P, 3 ) ) != JET_errSuccess )
+			{
+				break;
+			}
+
+			// The name should be an unterminated ASCII string. Add L"\0" to the end.
+			name[ rc_0P[ 0 ].cbActual ] = 0;
+			name[ rc_0P[ 0 ].cbActual + 1 ] = 0;
+
+			// Make sure our record is a column (type == 2) and it belongs to the SystemIndex_PropertyStore table.
+			if ( objid == t_objid && type == 2 )
+			{
+				++g_column_count;
+
+				// Windows 8+ columns have a hex number followed by a '-' separating the Windows Property.
+				char *prop_name = strchr( ( char * )name, '-' );
+				if ( prop_name == NULL )
+				{
+					prop_name = ( char * )name;
+				}
+				else
+				{
+					++prop_name;
+				}
+
+				// Convert the ASCII name to a wide char string.
+				int val_length = MultiByteToWideChar( CP_UTF8, 0, prop_name, -1, NULL, 0 );	// Include the NULL terminator.
+				wchar_t *val = ( wchar_t * )malloc( sizeof( wchar_t ) * val_length );
+				MultiByteToWideChar( CP_UTF8, 0, prop_name, -1, val, val_length );
+
+				ci = ( column_info * )malloc( sizeof( column_info ) );
+				ci->Name = val;
+				ci->Name_byte_length = ( val_length - 1 ) * sizeof( wchar_t );
+				ci->JetCompress = false;
+				ci->data = NULL;
+				ci->sei = NULL;
+				ci->next = NULL;
+
+				memset( &system_index_property_store_column, 0, sizeof( system_index_property_store_column ) );
+				JetGetTableColumnInfo( g_sesid, g_tableid_0A, ( JET_PCSTR )name, &system_index_property_store_column, sizeof( system_index_property_store_column ), JET_ColInfo );
+
+				ci->column_type = system_index_property_store_column.coltyp;
+				ci->column_id = system_index_property_store_column.columnid;
+				ci->max_size = system_index_property_store_column.cbMax;
+
+				// There's no data type information in Windows 8+ databases, so we'll make a guess based on the column type and data size.
+				if ( ci->column_type == JET_coltypBinary && ci->max_size == sizeof( unsigned long long ) )
+				{
+					ci->Type = VT_FILETIME;
+				}
+				else if ( ci->column_type == JET_coltypBit && ci->max_size == sizeof( unsigned char ) )
+				{
+					ci->Type = VT_BOOL;
+				}
+
+				if ( last_ci != NULL )
+				{
+					last_ci->next = ci;
+				}
+				else
+				{
+					g_ci = ci;
+				}
+
+				last_ci = ci;
+
+				if ( ci->Name_byte_length == 42 && wcscmp( ci->Name, L"System_FileAttributes" ) == 0 )
+				{
+					g_file_attributes = ci;
+				}
+				else if ( ci->Name_byte_length == 40 && wcscmp( ci->Name, L"System_FileExtension" ) == 0 )
+				{
+					g_file_extension = ci;
+				}
+				else if ( ci->Name_byte_length == 44 && wcscmp( ci->Name, L"System_ItemPathDisplay" ) == 0 )
+				{
+					g_item_path_display = ci;
+				}
+				else if ( ci->Name_byte_length == 46 && wcscmp( ci->Name, L"System_ThumbnailCacheId" ) == 0 )
+				{
+					ci->Type = 0;	// Reset the data type.
+					g_thumbnail_cache_id = ci;
+				}
+				else if ( ( ci->Name_byte_length == 22 && wcscmp( ci->Name, L"System_Size" ) == 0 ) ||
+						  ( ci->Name_byte_length == 42 && wcscmp( ci->Name, L"System_Media_Duration" ) == 0 ) ||
+						  ( ci->Name_byte_length == 64 && wcscmp( ci->Name, L"System_Document_TotalEditingTime" ) == 0 ) ||
+						  ( ci->Name_byte_length == 28 && wcscmp( ci->Name, L"System_FileFRN" ) == 0 ) )
+				{
+					ci->Type = 0;	// Reset the data type.
+				}
+			}
+
+			// Move to the next record (column row).
+			if ( JetMove( g_sesid, g_tableid_0P, JET_MoveNext, JET_bitNil ) != JET_errSuccess )
+			{
+				break;
+			}
+		}
+	}
+
+CLEANUP:
+
+	free( name );
+	name = NULL;
 
 	return g_err;
 }
