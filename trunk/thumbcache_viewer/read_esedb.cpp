@@ -382,7 +382,24 @@ void convert_values( extended_info **ei )
 						t_ei->property_value = ( wchar_t * )malloc( sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ) );	// Include the NULL terminator.
 						memcpy_s( t_ei->property_value, sizeof( char ) * ( g_rc_array[ i ].cbActual + sizeof( wchar_t ) ), t_ci->data, g_rc_array[ i ].cbActual );
 
-						t_ei->property_value[ g_rc_array[ i ].cbActual / sizeof( wchar_t ) ] = 0;	// Sanity.
+						unsigned long property_value_size = g_rc_array[ i ].cbActual / sizeof( wchar_t );
+						t_ei->property_value[ property_value_size ] = 0;	// Sanity.
+
+						// See if we have any string arrays.
+						if ( wcslen( t_ei->property_value ) < property_value_size )
+						{
+							// Replace the NULL character at the end of each string (except the last) with a ';' separator.
+							wchar_t *t_val = t_ei->property_value;
+							while ( t_val < ( t_ei->property_value + property_value_size ) )
+							{
+								if ( *t_val == 0 )
+								{
+									*t_val = L';';
+								}
+
+								++t_val;
+							}
+						}
 					}
 					break;
 				}
