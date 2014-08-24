@@ -84,14 +84,23 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 
 	// Retrieve the column information once so we don't have to call this for duplicate entries in the loop below.
 	bool got_columns = false;
+	extended_info *ei = NULL;
 	if ( g_retrieve_extended_information == true )
 	{
-		if ( ll != NULL && ll->fi != NULL && ll->fi->ei == NULL )
+		if ( ll != NULL && ll->fi != NULL )
 		{
-			// Retrieve all the records associated with the matching System_ThumbnailCacheId.
-			if ( ( g_err = JetRetrieveColumns( g_sesid, g_tableid_0A, g_rc_array, g_column_count ) ) == JET_errSuccess )
+			if ( ll->fi->ei == NULL )
 			{
-				got_columns = true;
+				// Retrieve all the records associated with the matching System_ThumbnailCacheId.
+				if ( ( g_err = JetRetrieveColumns( g_sesid, g_tableid_0A, g_rc_array, g_column_count ) ) == JET_errSuccess )
+				{
+					got_columns = true;
+				}
+			}
+			else
+			{
+				// Save this to copy to any linked list nodes that have NULL extended info.
+				ei = ll->fi->ei;
 			}
 		}
 	}
@@ -110,6 +119,37 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 			{
 				// Convert the record values to strings so we can print them out.
 				convert_values( &( ll->fi->ei ) );
+			}
+			else if ( ll->fi->ei == NULL )
+			{
+				// If we have extended information, but didn't retrieve any columns, then copy it to our fileinfo linked list nodes.
+				extended_info *l_ei = NULL;
+				extended_info *t_ei = ei;
+				while ( t_ei != NULL )
+				{
+					if ( t_ei->sei != NULL )
+					{
+						++( t_ei->sei->count );
+
+						extended_info *c_ei = ( extended_info * )malloc( sizeof( extended_info ) );
+						c_ei->sei = t_ei->sei;
+						c_ei->property_value = _wcsdup( t_ei->property_value );
+						c_ei->next = NULL;
+
+						if ( l_ei != NULL )
+						{
+							l_ei->next = c_ei;
+						}
+						else
+						{
+							ll->fi->ei = c_ei;
+						}
+
+						l_ei = c_ei;
+					}
+
+					t_ei = t_ei->next;
+				}
 			}
 		}
 
@@ -140,41 +180,45 @@ unsigned long long hash_data( char *data, unsigned long long hash, short length 
 	return hash;
 }
 
+// Windows 8.1 uses a different algorithm. I'm not sure what it does after the Volume GUID hash. Something to look into...
 void hash_file( wchar_t *filepath, wchar_t *extension )
 {
 	// Initial hash value. This value was found in shell32.dll.
 	unsigned long long hash = 0x95E729BA2C37FD21;
 
-	// Hash Volume GUID
-	hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
-
-	// Hash File ID - found in the Master File Table.
 	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL );
-	BY_HANDLE_FILE_INFORMATION bhfi;
-	GetFileInformationByHandle( hFile, &bhfi );
-	CloseHandle( hFile );
-	unsigned long long file_id = bhfi.nFileIndexHigh;
-	file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
-
-	hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
-
-	// Windows Vista doesn't hash the file extension or modified DOS time.
-	if ( is_win_7_or_higher == true )
+	if ( hFile != INVALID_HANDLE_VALUE )
 	{
-		// Hash Wide Character File Extension
-		hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
+		// Hash Volume GUID
+		hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
 
-		// Hash Last Modified DOS Time
-		unsigned short fat_date;
-		unsigned short fat_time;
-		FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
-		unsigned int dos_time = fat_date;
-		dos_time = ( dos_time << 16 ) | fat_time;
+		// Hash File ID - found in the Master File Table.
+		BY_HANDLE_FILE_INFORMATION bhfi;
+		GetFileInformationByHandle( hFile, &bhfi );
+		CloseHandle( hFile );
+		unsigned long long file_id = bhfi.nFileIndexHigh;
+		file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
 
-		hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+		hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
+
+		// Windows Vista doesn't hash the file extension or modified DOS time.
+		if ( is_win_7_or_higher == true )
+		{
+			// Hash Wide Character File Extension
+			hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
+
+			// Hash Last Modified DOS Time
+			unsigned short fat_date;
+			unsigned short fat_time;
+			FileTimeToDosDateTime( &bhfi.ftLastWriteTime, &fat_date, &fat_time );
+			unsigned int dos_time = fat_date;
+			dos_time = ( dos_time << 16 ) | fat_time;
+
+			hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+		}
+
+		update_scan_info( hash, filepath );
 	}
-
-	update_scan_info( hash, filepath );
 }
 
 void traverse_directory( wchar_t *path )
@@ -186,8 +230,8 @@ void traverse_directory( wchar_t *path )
 	}
 
 	// Set the file path to search for all files/folders in the current directory.
-	wchar_t filepath[ MAX_PATH ];
-	swprintf_s( filepath, MAX_PATH, L"%s\\*", path );
+	wchar_t filepath[ ( MAX_PATH * 2 ) + 2 ];
+	swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\*", path );
 
 	WIN32_FIND_DATA FindFileData;
 	HANDLE hFind = FindFirstFileEx( ( LPCWSTR )filepath, FindExInfoStandard, &FindFileData, FindExSearchNameMatch, NULL, 0 );
@@ -206,15 +250,16 @@ void traverse_directory( wchar_t *path )
 				// Go through all directories except "." and ".." (current and parent)
 				if ( ( wcscmp( FindFileData.cFileName, L"." ) != 0 ) && ( wcscmp( FindFileData.cFileName, L".." ) != 0 ) )
 				{
-					// Move to the next directory.
-					swprintf_s( filepath, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
-
-					traverse_directory( filepath );
-
-					// Only hash folders if enabled.
-					if ( g_include_folders == true )
+					// Move to the next directory. Limit the path length to MAX_PATH.
+					if ( swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\%.259s", path, FindFileData.cFileName ) < MAX_PATH )
 					{
-						hash_file( filepath, L"" );
+						traverse_directory( filepath );
+
+						// Only hash folders if enabled.
+						if ( g_include_folders == true )
+						{
+							hash_file( filepath, L"" );
+						}
 					}
 				}
 			}
@@ -244,7 +289,11 @@ void traverse_directory( wchar_t *path )
 					free( temp_ext );
 				}
 
-				swprintf_s( filepath, MAX_PATH, L"%s\\%s", path, FindFileData.cFileName );
+				if ( swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\%.259s", path, FindFileData.cFileName ) >= MAX_PATH && FindFileData.cAlternateFileName[ 0 ] != 0 )
+				{
+					// See if the 8.3 filename can fit.
+					swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\%.259s", path, FindFileData.cAlternateFileName );
+				}
 
 				hash_file( filepath, ext );
 			}
