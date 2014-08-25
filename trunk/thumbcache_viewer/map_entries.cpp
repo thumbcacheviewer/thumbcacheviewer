@@ -36,6 +36,7 @@ bool g_show_details = false;						// Show details in the scan window.
 bool g_kill_scan = true;							// Stop a file scan.
 
 bool is_win_7_or_higher = true;						// Windows Vista uses a different file hashing algorithm.
+bool is_win_8_1_or_higher = true;					// Windows 8.1 uses a different file hashing algorithm.
 
 CLSID clsid;										// Holds a drive's Volume GUID.
 unsigned int file_count = 0;						// Number of files scanned.
@@ -43,7 +44,7 @@ unsigned int match_count = 0;						// Number of files that match an entry hash.
 
 #define _WIN32_WINNT_WIN7		0x0601
 //#define _WIN32_WINNT_WIN8		0x0602
-//#define _WIN32_WINNT_WINBLUE	0x0603
+#define _WIN32_WINNT_WINBLUE	0x0603
 
 BOOL IsWindowsVersionOrGreater( WORD wMajorVersion, WORD wMinorVersion, WORD wServicePackMajor )
 {
@@ -70,12 +71,12 @@ BOOL IsWindows7OrGreater()
 /*BOOL IsWindows8OrGreater()
 {
 	return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN8 ), LOBYTE( _WIN32_WINNT_WIN8 ), 0 );
-}
+}*/
 
-IsWindows8Point1OrGreater()
+BOOL IsWindows8Point1OrGreater()
 {
 	return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINBLUE ), LOBYTE( _WIN32_WINNT_WINBLUE ), 0 );
-}*/
+}
 
 void update_scan_info( unsigned long long hash, wchar_t *filepath )
 {
@@ -180,7 +181,6 @@ unsigned long long hash_data( char *data, unsigned long long hash, short length 
 	return hash;
 }
 
-// Windows 8.1 uses a different algorithm. I'm not sure what it does after the Volume GUID hash. Something to look into...
 void hash_file( wchar_t *filepath, wchar_t *extension )
 {
 	// Initial hash value. This value was found in shell32.dll.
@@ -215,6 +215,23 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 			dos_time = ( dos_time << 16 ) | fat_time;
 
 			hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+
+			// Windows 8.1 calculates the precision loss between the converted write time and original write time.
+			if ( is_win_8_1_or_higher == true )
+			{
+				// Convert the DOS time back into a FILETIME.
+				FILETIME converted_write_time;
+				DosDateTimeToFileTime( fat_date, fat_time, &converted_write_time );
+
+				// We only need to hash the low order int.
+				unsigned int precision_loss = converted_write_time.dwLowDateTime - bhfi.ftLastWriteTime.dwLowDateTime;
+
+				// Hash if there's any precision loss.
+				if ( precision_loss != 0 )
+				{
+					hash = hash_data( ( char * )&precision_loss, hash, sizeof( unsigned int ) );
+				}
+			}
 		}
 
 		update_scan_info( hash, filepath );
@@ -552,6 +569,7 @@ unsigned __stdcall map_entries( void *pArguments )
 
 			// Assume anything below Windows 7 is running on Windows Vista.
 			is_win_7_or_higher = ( IsWindows7OrGreater() != FALSE ? true : false );
+			is_win_8_1_or_higher = ( IsWindows8Point1OrGreater() != FALSE ? true : false );
 
 			traverse_directory( g_filepath );
 		}
