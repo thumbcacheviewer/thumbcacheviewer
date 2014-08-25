@@ -186,7 +186,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 	// Initial hash value. This value was found in shell32.dll.
 	unsigned long long hash = 0x95E729BA2C37FD21;
 
-	HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL );
+	HANDLE hFile = CreateFile( filepath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL );
 	if ( hFile != INVALID_HANDLE_VALUE )
 	{
 		// Hash Volume GUID
