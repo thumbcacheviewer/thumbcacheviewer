@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2014 Eric Kutcher
+    Copyright (C) 2011-2015 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -200,7 +200,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			ListViewProc = ( WNDPROC )GetWindowLong( g_hWnd_list, GWL_WNDPROC );
 			SetWindowLong( g_hWnd_list, GWL_WNDPROC, ( LONG )ListViewSubProc );
 
-			// Initliaze our listview columns
+			// Initialize our listview columns
 			LVCOLUMNA lvc = { NULL }; 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
 			lvc.fmt = LVCFMT_CENTER;
@@ -635,7 +635,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.7\r\n\r\nCopyright \xA9 2011-2014 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.8\r\n\r\nCopyright \xA9 2011-2015 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1117,8 +1117,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			DRAWITEMSTRUCT *dis = ( DRAWITEMSTRUCT * )lParam;
       
 			// The item we want to draw is our listview.
-			if ( dis->CtlType == ODT_LISTVIEW )
+			if ( dis->CtlType == ODT_LISTVIEW && dis->itemData != NULL )
 			{
+				fileinfo *fi = ( fileinfo * )dis->itemData;
+				if ( fi->si == NULL )
+				{
+					return TRUE;
+				}
+
 				// Alternate item color's background.
 				if ( dis->itemID % 2 )	// Even rows will have a light grey background.
 				{
@@ -1140,18 +1146,6 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					FillRect( dis->hDC, &dis->rcItem, color );
 					DeleteObject( color );
 					selected = true;
-				}
-
-				// Get the item's text.
-				LVITEM lvi = { 0 };
-				lvi.mask = LVIF_PARAM;
-				lvi.iItem = dis->itemID;
-				SendMessage( dis->hwndItem, LVM_GETITEM, 0, ( LPARAM )&lvi );	// Get the lParam value from our item.
-
-				fileinfo *fi = ( fileinfo * )lvi.lParam;
-				if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
-				{
-					return TRUE;
 				}
 
 				wchar_t tbuf[ MAX_PATH ];
