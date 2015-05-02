@@ -154,6 +154,8 @@ extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc
 
 extern HFONT hFont;					// Handle to the system's message font.
 
+extern int row_height;				// Height of our listview rows.
+
 extern HICON hIcon_bmp;				// Handle to the system's .bmp icon.
 extern HICON hIcon_jpg;				// Handle to the system's .jpg icon.
 extern HICON hIcon_png;				// Handle to the system's .png icon.

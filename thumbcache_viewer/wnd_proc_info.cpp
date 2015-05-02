@@ -26,7 +26,7 @@
 
 HWND g_hWnd_static_mapped_hash = NULL;
 HWND g_hWnd_list_info = NULL;
-HWND g_hWnd_btn_ok = NULL;
+HWND g_hWnd_btn_close = NULL;
 
 fileinfo *g_current_fi = NULL;
 
@@ -104,13 +104,13 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			lvc.cx = 200;
 			SendMessageA( g_hWnd_list_info, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
-			g_hWnd_btn_ok = CreateWindowA( WC_BUTTONA, "OK", BS_DEFPUSHBUTTON | WS_CHILD | WS_TABSTOP | WS_VISIBLE, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, hWnd, ( HMENU )BTN_OK, NULL, NULL );
+			g_hWnd_btn_close = CreateWindowA( WC_BUTTONA, "Close", BS_DEFPUSHBUTTON | WS_CHILD | WS_TABSTOP | WS_VISIBLE, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, hWnd, ( HMENU )BTN_OK, NULL, NULL );
 
 			// Make pretty font.
 			SendMessage( g_hWnd_static1, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_static_mapped_hash, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_list_info, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_btn_ok, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_btn_close, WM_SETFONT, ( WPARAM )hFont, 0 );
 
 			return 0;
 		}
@@ -293,7 +293,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// Set the row height of the list view.
 			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType = ODT_LISTVIEW )
 			{
-				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = GetSystemMetrics( SM_CYSMICON ) + 2;
+				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height;
 			}
 			return TRUE;
 		}
@@ -390,7 +390,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				wchar_t *buf = L"";
 
 				// This is the full size of the row.
-				RECT last_rc = { 0 };
+				RECT last_rc;
 
 				// This will keep track of the current colunn's left position.
 				int last_left = 0;
@@ -425,7 +425,6 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// This will adjust the text to fit nicely into the rectangle.
 					last_rc.left = 5 + last_left;
 					last_rc.right = lvc.cx + last_left - 5;
-					last_rc.top += 2;
 					
 					// Save the height and width of this region.
 					int width = last_rc.right - last_rc.left;
@@ -467,11 +466,11 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						// Shadow color - black.
 						//SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
-						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS );
+						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS );
 
 						// White text.
 						SetTextColor( hdcMem, RGB( 0xFF, 0xFF, 0xFF ) );
-						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS );
+						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS );
 
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCCOPY );
 					}
@@ -484,11 +483,11 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						// Shadow color - light grey.
 						//SetTextColor( hdcMem, RGB( 0xE0, 0xE0, 0xE0 ) );
-						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS );
+						//DrawText( hdcMem, buf, -1, &rc2, DT_NOPREFIX | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS );
 
 						// Show red text if our checksums don't match and black for everything else.
 						SetTextColor( hdcMem, RGB( 0x00, 0x00, 0x00 ) );
-						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_END_ELLIPSIS );
+						DrawText( hdcMem, buf, -1, &rc, DT_NOPREFIX | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS );
 
 						BitBlt( dis->hDC, dis->rcItem.left + last_rc.left, last_rc.top, width, height, hdcMem, 0, 0, SRCAND );
 					}
@@ -511,8 +510,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			// Allow our controls to move in relation to the parent window.
 			HDWP hdwp = BeginDeferWindowPos( 2 );
-			DeferWindowPos( hdwp, g_hWnd_btn_ok, HWND_TOP, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, 0 );
-			DeferWindowPos( hdwp, g_hWnd_list_info, HWND_TOP, 20, 40, rc.right - 40, rc.bottom - 90, 0 );
+			DeferWindowPos( hdwp, g_hWnd_list_info, HWND_TOP, 20, 40, rc.right - 40, rc.bottom - 90, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_btn_close, HWND_TOP, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, SWP_NOZORDER );
 			EndDeferWindowPos( hdwp );
 
 			return 0;

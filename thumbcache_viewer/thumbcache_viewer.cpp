@@ -35,6 +35,8 @@ HWND g_hWnd_active = NULL;		// Handle to the active window. Used to handle tab s
 
 HFONT hFont = NULL;				// Handle to our font object.
 
+int row_height = 0;				// Height of our listview rows.
+
 HICON hIcon_bmp = NULL;			// Handle to the system's .bmp icon.
 HICON hIcon_jpg = NULL;			// Handle to the system's .jpg icon.
 HICON hIcon_png = NULL;			// Handle to the system's .png icon.
@@ -61,6 +63,22 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	// Set our global font to the LOGFONT value obtained from the system.
 	hFont = CreateFontIndirect( &ncm.lfMessageFont );
+
+	// Get the row height for our listview control.
+	TEXTMETRIC tm;
+	HDC hDC = GetDC( NULL );
+	HFONT ohf = ( HFONT )SelectObject( hDC, hFont );
+	GetTextMetricsW( hDC, &tm );
+	SelectObject( hDC, ohf );	// Reset old font.
+	ReleaseDC( NULL, hDC );
+
+	row_height = tm.tmHeight + tm.tmExternalLeading + 5;
+
+	int icon_height = GetSystemMetrics( SM_CYSMICON ) + 2;
+	if ( row_height < icon_height )
+	{
+		row_height = icon_height;
+	}
 
 	// Get the system icon for each of the three file types.
 	SHFILEINFOA shfi = { NULL }; 
