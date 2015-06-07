@@ -36,14 +36,17 @@
 #define WINDOWS_8v2		0x1C
 #define WINDOWS_8v3		0x1E
 #define WINDOWS_8_1		0x1F
+#define WINDOWS_10		0x20
 
 // Thumbcache header information.
 struct database_header
 {
 	char magic_identifier[ 4 ];
 	unsigned int version;
-	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
-};						// Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
+	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr
+};						// Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
+						// Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
+						// Windows 10: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 768, 06 = 1280, 07 = 1920, 08 = 2560, 09 = sr, 0A = wide, 0B = exif, 0C = wide_alternate, 0D = custom_stream
 
 // Found in WINDOWS_VISTA/7/8 databases.
 struct database_header_entry_info
@@ -62,7 +65,7 @@ struct database_header_entry_info_v2
 	unsigned int number_of_cache_entries;
 };
 
-// Found in WINDOWS_8v3/8_1 databases.
+// Found in WINDOWS_8v3/8_1/10 databases.
 struct database_header_entry_info_v3
 {
 	unsigned int unknown;
@@ -280,7 +283,8 @@ int wmain( int argc, wchar_t *argv[] )
 					case 'h':
 					case 'H':
 					{
-						printf( "\nthumbcache_viewer_cmd [-o directory][-w][-c][-z][-n] thumbcache_*.db\n" \
+						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.5\nCopyright (c) 2011-2015 Eric Kutcher\n\n" \
+								"thumbcache_viewer_cmd [-o directory][-w][-c][-z][-n] thumbcache_*.db\n" \
 								" -o\tSet the output directory for thumbnails and reports.\n" \
 								" -w\tGenerate an HTML report.\n" \
 								" -c\tGenerate a comma-separated values (CSV) report.\n" \
@@ -324,7 +328,7 @@ int wmain( int argc, wchar_t *argv[] )
 		database_header dh = { 0 };
 		ReadFile( hFile, &dh, sizeof( database_header ), &read, NULL );
 
-		// Make sure it's a thumbcache database and the stucture was filled correctly.
+		// Make sure it's a thumbcache database and the structure was filled correctly.
 		if ( memcmp( dh.magic_identifier, "CMMM", 4 ) != 0 || read != sizeof( database_header ) )
 		{
 			CloseHandle( hFile );
@@ -358,6 +362,10 @@ int wmain( int argc, wchar_t *argv[] )
 		{
 			printf( "Version: Windows 8.1\n" );
 		}
+		else if ( dh.version == WINDOWS_10 )
+		{
+			printf( "Version: Windows 10\n" );
+		}
 		else
 		{
 			CloseHandle( hFile );
@@ -387,6 +395,69 @@ int wmain( int argc, wchar_t *argv[] )
 			else if ( dh.type == 0x04 )
 			{
 				printf( "Cache type: thumbcache_sr.db\n" );
+			}
+			else
+			{
+				printf( "Cache type: Unknown\n" );
+			}
+		}
+		else if ( dh.version == WINDOWS_10 )
+		{
+			if ( dh.type == 0x00 )
+			{
+				printf( "Cache type: thumbcache_16.db, 16x16\n" );
+			}
+			else if ( dh.type == 0x01 )
+			{
+				printf( "Cache type: thumbcache_32.db, 32x32\n" );
+			}
+			else if ( dh.type == 0x02 )
+			{
+				printf( "Cache type: thumbcache_48.db, 48x48\n" );
+			}
+			else if ( dh.type == 0x03 )
+			{
+				printf( "Cache type: thumbcache_96.db, 96x96\n" );
+			}
+			else if ( dh.type == 0x04 )
+			{
+				printf( "Cache type: thumbcache_256.db, 256x256\n" );
+			}
+			else if ( dh.type == 0x05 )
+			{
+				printf( "Cache type: thumbcache_768.db, 768x768\n" );
+			}
+			else if ( dh.type == 0x06 )
+			{
+				printf( "Cache type: thumbcache_1280.db, 1280x1280\n" );
+			}
+			else if ( dh.type == 0x07 )
+			{
+				printf( "Cache type: thumbcache_1920.db, 1920x1920\n" );
+			}
+			else if ( dh.type == 0x08 )
+			{
+				printf( "Cache type: thumbcache_2560.db, 2560x2560\n" );
+			}
+			else if ( dh.type == 0x09 )
+			{
+				printf( "Cache type: thumbcache_sr.db\n" );
+			}
+			else if ( dh.type == 0x0A )
+			{
+				printf( "Cache type: thumbcache_wide.db\n" );
+			}
+			else if ( dh.type == 0x0B )
+			{
+				printf( "Cache type: thumbcache_exif.db\n" );
+			}
+			else if ( dh.type == 0x0C )
+			{
+				printf( "Cache type: thumbcache_wide_alternate.db\n" );
+			}
+			else if ( dh.type == 0x0D )
+			{
+				printf( "Cache type: thumbcache_custom_stream.db\n" );
 			}
 			else
 			{
@@ -501,7 +572,7 @@ int wmain( int argc, wchar_t *argv[] )
 			available_cache_entry = dhei.available_cache_entry;
 			number_of_cache_entries = dhei.number_of_cache_entries;
 		}
-		else if ( dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
+		else if ( dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )
 		{
 			database_header_entry_info_v3 dhei = { 0 };
 			ReadFile( hFile, &dhei, sizeof( database_header_entry_info_v3 ), &read, NULL );
@@ -524,7 +595,7 @@ int wmain( int argc, wchar_t *argv[] )
 		printf( "Offset to available cache entry: %lu bytes\n", available_cache_entry );
 
 		// Number of cache entries.
-		if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 )
+		if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 && dh.version != WINDOWS_10 )
 		{
 			printf( "Number of cache entries: %lu\n", number_of_cache_entries );
 		}
@@ -577,7 +648,7 @@ int wmain( int argc, wchar_t *argv[] )
 				}
 
 				char entries[ 11 ] = { 0 };
-				if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 )
+				if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 && dh.version != WINDOWS_10 )
 				{
 					sprintf_s( entries, 11, "%lu", number_of_cache_entries );
 				}
@@ -596,13 +667,15 @@ int wmain( int argc, wchar_t *argv[] )
 								"Number of cache entries: %s<br />" \
 								"Output path: %s\\<br /><br />" \
 								"<table border=1 cellspacing=0><tr><td>Index</td><td>Offset (bytes)</td><td>Cache Size (bytes)</td><td>Data Size (bytes)</td>%s<td>Entry Hash</td><td>Data Checksum</td><td>Header Checksum</td><td>Indentifier String</td><td>Image</td></tr>",
-								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : "Windows 8" ) ) ),
+								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : ( dh.version == WINDOWS_10 ? "Windows 10" : "Windows 8" ) ) ) ),
 								( dh.version == WINDOWS_VISTA || dh.version == WINDOWS_7 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
 								( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? \
 								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_sr.db" : ( dh.type == 0x07 ? "thumbcache_wide.db" : ( dh.type == 0x08 ? "thumbcache_exif.db" : "Unknown" ) ) ) ) ) ) ) ) ) : \
-								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_1600.db" : ( dh.type == 0x07 ? "thumbcache_sr.db" : ( dh.type == 0x08 ? "thumbcache_wide.db" : ( dh.type == 0x09 ? "thumbcache_exif.db" : ( dh.type == 0x0A ? "thumbcache_wide_alternate.db" : "Unknown" ) ) ) ) ) ) ) ) ) ) ),
-								first_cache_entry, available_cache_entry, entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 ) ? "<td>Dimensions</td>" : "" ) );
+								( dh.version == WINDOWS_8_1 ) ? \
+								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_1600.db" : ( dh.type == 0x07 ? "thumbcache_sr.db" : ( dh.type == 0x08 ? "thumbcache_wide.db" : ( dh.type == 0x09 ? "thumbcache_exif.db" : ( dh.type == 0x0A ? "thumbcache_wide_alternate.db" : "Unknown" ) ) ) ) ) ) ) ) ) ) ) : \
+								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_768.db" : ( dh.type == 0x06 ? "thumbcache_1280.db" : ( dh.type == 0x07 ? "thumbcache_1920.db" : ( dh.type == 0x08 ? "thumbcache_2560.db" : ( dh.type == 0x09 ? "thumbcache_sr.db" : ( dh.type == 0x0A ? "thumbcache_wide.db" : ( dh.type == 0x0B ? "thumbcache_exif.db" : ( dh.type == 0x0C ? "thumbcache_wide_alternate" : ( dh.type == 0x0D ? "thumbcache_custom_stream" : "Unknown" ) ) ) ) ) ) ) ) ) ) ) ) ) ),
+								first_cache_entry, available_cache_entry, entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 ) ? "<td>Dimensions</td>" : "" ) );
 				WriteFile( hFile_html, buf, write_size, &written, NULL );
 
 				free( buf );
@@ -627,7 +700,7 @@ int wmain( int argc, wchar_t *argv[] )
 				}
 
 				char entries[ 11 ] = { 0 };
-				if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 )
+				if ( dh.version != WINDOWS_8v3 && dh.version != WINDOWS_8_1 && dh.version != WINDOWS_10 )
 				{
 					sprintf_s( entries, 11, "%lu", number_of_cache_entries );
 				}
@@ -646,13 +719,15 @@ int wmain( int argc, wchar_t *argv[] )
 								"Number of cache entries,%s\r\n" \
 								"Output path,\"%s\\\"\r\n\r\n" \
 								"Index,Offset (bytes),Cache Size (bytes),Data Size (bytes),%sEntry Hash,Data Checksum,Header Checksum,Indentifier String\r\n",
-								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : "Windows 8" ) ) ),
+								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : ( dh.version == WINDOWS_10 ? "Windows 10" : "Windows 8" ) ) ) ),
 								( dh.version == WINDOWS_VISTA || dh.version == WINDOWS_7 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
 								( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 ) ? \
 								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_sr.db" : ( dh.type == 0x07 ? "thumbcache_wide.db" : ( dh.type == 0x08 ? "thumbcache_exif.db" : "Unknown" ) ) ) ) ) ) ) ) ) : \
-								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_1600.db" : ( dh.type == 0x07 ? "thumbcache_sr.db" : ( dh.type == 0x08 ? "thumbcache_wide.db" : ( dh.type == 0x09 ? "thumbcache_exif.db" : ( dh.type == 0x0A ? "thumbcache_wide_alternate.db" : "Unknown" ) ) ) ) ) ) ) ) ) ) ),
-								first_cache_entry, available_cache_entry, entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 ) ? "Dimensions," : "" ) );
+								( dh.version == WINDOWS_8_1 ) ? \
+								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_1024.db" : ( dh.type == 0x06 ? "thumbcache_1600.db" : ( dh.type == 0x07 ? "thumbcache_sr.db" : ( dh.type == 0x08 ? "thumbcache_wide.db" : ( dh.type == 0x09 ? "thumbcache_exif.db" : ( dh.type == 0x0A ? "thumbcache_wide_alternate.db" : "Unknown" ) ) ) ) ) ) ) ) ) ) ) : \
+								( dh.type == 0x00 ? "thumbcache_16.db" : ( dh.type == 0x01 ? "thumbcache_32.db" : ( dh.type == 0x02 ? "thumbcache_48.db" : ( dh.type == 0x03 ? "thumbcache_96.db" : ( dh.type == 0x04 ? "thumbcache_256.db" : ( dh.type == 0x05 ? "thumbcache_768.db" : ( dh.type == 0x06 ? "thumbcache_1280.db" : ( dh.type == 0x07 ? "thumbcache_1920.db" : ( dh.type == 0x08 ? "thumbcache_2560.db" : ( dh.type == 0x09 ? "thumbcache_sr.db" : ( dh.type == 0x0A ? "thumbcache_wide.db" : ( dh.type == 0x0B ? "thumbcache_exif.db" : ( dh.type == 0x0C ? "thumbcache_wide_alternate" : ( dh.type == 0x0D ? "thumbcache_custom_stream" : "Unknown" ) ) ) ) ) ) ) ) ) ) ) ) ) ),
+								first_cache_entry, available_cache_entry, entries, utf8_path, ( ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 ) ? "Dimensions," : "" ) );
 				WriteFile( hFile_csv, buf, write_size, &written, NULL );
 
 				free( buf );
@@ -688,7 +763,7 @@ int wmain( int argc, wchar_t *argv[] )
 				database_cache_entry = ( database_cache_entry_7 * )malloc( sizeof( database_cache_entry_7 ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_7 ), &read, NULL );
 				
-				// Make sure it's a thumbcache database and the stucture was filled correctly.
+				// Make sure it's a thumbcache database and the structure was filled correctly.
 				if ( read != sizeof( database_cache_entry_7 ) )
 				{
 					free( database_cache_entry );
@@ -724,7 +799,7 @@ int wmain( int argc, wchar_t *argv[] )
 				database_cache_entry = ( database_cache_entry_vista * )malloc( sizeof( database_cache_entry_vista ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_vista ), &read, NULL );
 				
-				// Make sure it's a thumbcache database and the stucture was filled correctly.
+				// Make sure it's a thumbcache database and the structure was filled correctly.
 				if ( read != sizeof( database_cache_entry_vista ) )
 				{
 					free( database_cache_entry );
@@ -755,12 +830,12 @@ int wmain( int argc, wchar_t *argv[] )
 					break;
 				}
 			}
-			else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
+			else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )
 			{
 				database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
 				ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
 				
-				// Make sure it's a thumbcache database and the stucture was filled correctly.
+				// Make sure it's a thumbcache database and the structure was filled correctly.
 				if ( read != sizeof( database_cache_entry_8 ) )
 				{
 					free( database_cache_entry );
@@ -844,8 +919,8 @@ int wmain( int argc, wchar_t *argv[] )
 			unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_size : ( ( database_cache_entry_8 * )database_cache_entry )->data_size ) );
 			printf( "Data size: %lu bytes\n", data_size );
 
-			// Windows 8 contains the width and height of the image.
-			if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
+			// Windows 8/8.1/10 contains the width and height of the image.
+			if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )
 			{
 				printf( "Dimensions: %lux%lu\n", ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height );
 			}
@@ -960,7 +1035,7 @@ int wmain( int argc, wchar_t *argv[] )
 			{
 				char buf[ 196 ];
 				int write_size = 0;
-				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )	// Windows 8 includes dimensions (width x height)
+				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )	// Windows 8/8.1/10 includes dimensions (width x height)
 				{
 					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%lux%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
 				}
@@ -1002,7 +1077,7 @@ int wmain( int argc, wchar_t *argv[] )
 			{
 				char buf[ 125 ];
 				int write_size = 0;
-				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )	// Windows 8 includes dimensions (width x height)
+				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )	// Windows 8/8.1/10 includes dimensions (width x height)
 				{
 					write_size = sprintf_s( buf, 125, "%lu,%lu,%lu,%lu,%lux%lu,%s,%s,%s,\"", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
 				}
