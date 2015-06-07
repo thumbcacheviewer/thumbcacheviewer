@@ -25,6 +25,7 @@
 #define WINDOWS_8v2		0x1C
 #define WINDOWS_8v3		0x1E
 #define WINDOWS_8_1		0x1F
+#define WINDOWS_10		0x20
 
 #define FILE_TYPE_BMP	"BM"
 #define FILE_TYPE_JPEG	"\xFF\xD8\xFF\xE0"
@@ -35,8 +36,10 @@ struct database_header
 {
 	char magic_identifier[ 4 ];
 	unsigned int version;
-	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr // Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
-};						// Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
+	unsigned int type;	// Windows Vista & 7: 00 = 32, 01 = 96, 02 = 256, 03 = 1024, 04 = sr
+};						// Windows 8: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = sr, 07 = wide, 08 = exif
+						// Windows 8.1: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 1024, 06 = 1600, 07 = sr, 08 = wide, 09 = exif, 0A = wide_alternate
+						// Windows 10: 00 = 16, 01 = 32, 02 = 48, 03 = 96, 04 = 256, 05 = 768, 06 = 1280, 07 = 1920, 08 = 2560, 09 = sr, 0A = wide, 0B = exif, 0C = wide_alternate, 0D = custom_stream
 /*
 // Found in WINDOWS_VISTA/7/8 databases.
 struct database_header_entry_info
@@ -55,7 +58,7 @@ struct database_header_entry_info_v2
 	unsigned int number_of_cache_entries;
 };
 
-// Found in WINDOWS_8v3/8_1 databases.
+// Found in WINDOWS_8v3/8_1/10 databases.
 struct database_header_entry_info_v3
 {
 	unsigned int unknown;

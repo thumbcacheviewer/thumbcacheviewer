@@ -478,7 +478,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						ofn.hwndOwner = hWnd;
 
 						// Display the Open File dialog box
-						if( GetOpenFileName( &ofn ) )
+						if ( GetOpenFileName( &ofn ) )
 						{
 							pi->offset = ofn.nFileOffset;
 							pi->output_path = NULL;
@@ -638,7 +638,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.2.9\r\n\r\nCopyright \xA9 2011-2015 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.0\r\n\r\nCopyright \xA9 2011-2015 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1258,25 +1258,45 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 						case 9:
 						{
-							if ( fi->si->system == WINDOWS_7 )
+							switch ( fi->si->system )
 							{
-								buf = L"Windows 7";
-							}
-							else if ( fi->si->system == WINDOWS_8 || fi->si->system == WINDOWS_8v2 || fi->si->system == WINDOWS_8v3 )
-							{
-								buf = L"Windows 8";
-							}
-							else if ( fi->si->system == WINDOWS_8_1 )
-							{
-								buf = L"Windows 8.1";
-							}
-							else if ( fi->si->system == WINDOWS_VISTA )
-							{
-								buf = L"Windows Vista";
-							}
-							else
-							{
-								buf = L"Unknown";
+								case WINDOWS_VISTA:
+								{
+									buf = L"Windows Vista";
+								}
+								break;
+
+								case WINDOWS_7:
+								{
+									buf = L"Windows 7";
+								}
+								break;
+
+								case WINDOWS_8:
+								case WINDOWS_8v2:
+								case WINDOWS_8v3:
+								{
+									buf = L"Windows 8";
+								}
+								break;
+
+								case WINDOWS_8_1:
+								{
+									buf = L"Windows 8.1";
+								}
+								break;
+
+								case WINDOWS_10:
+								{
+									buf = L"Windows 10";
+								}
+								break;
+
+								default:
+								{
+									buf = L"Unknown";
+								}
+								break;
 							}
 						}
 						break;
@@ -1296,9 +1316,17 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// This will adjust the text to fit nicely into the rectangle.
 					last_rc.left = 5 + last_left;
 					last_rc.right = lvc.cx + last_left - 5;
-					
+
+					// Save the last left position of our column.
+					last_left += lvc.cx;
+
 					// Save the height and width of this region.
 					int width = last_rc.right - last_rc.left;
+					if ( width <= 0 )
+					{
+						continue;
+					}
+
 					int height = last_rc.bottom - last_rc.top;
 
 					// Normal text position.
@@ -1375,9 +1403,6 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					// Delete our back buffer.
 					DeleteDC( hdcMem );
-
-					// Save the last left position of our column.
-					last_left += lvc.cx;
 				}
 			}
 			return TRUE;

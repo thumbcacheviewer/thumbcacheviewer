@@ -599,30 +599,51 @@ unsigned __stdcall copy_items( void *pArguments )
 
 				case 9:
 				{
-					if ( fi->si->system == WINDOWS_7 )
+					switch ( fi->si->system )
 					{
-						buf = L"Windows 7";
-						value_length = 9;
-					}
-					else if ( fi->si->system == WINDOWS_8 || fi->si->system == WINDOWS_8v2 || fi->si->system == WINDOWS_8v3 )
-					{
-						buf = L"Windows 8";
-						value_length = 9;
-					}
-					else if ( fi->si->system == WINDOWS_8_1 )
-					{
-						buf = L"Windows 8.1";
-						value_length = 11;
-					}
-					else if ( fi->si->system == WINDOWS_VISTA )
-					{
-						buf = L"Windows Vista";
-						value_length = 13;
-					}
-					else
-					{
-						buf = L"Unknown";
-						value_length = 7;
+						case WINDOWS_VISTA:
+						{
+							buf = L"Windows Vista";
+							value_length = 13;
+						}
+						break;
+
+						case WINDOWS_7:
+						{
+							buf = L"Windows 7";
+							value_length = 9;
+						}
+						break;
+
+						case WINDOWS_8:
+						case WINDOWS_8v2:
+						case WINDOWS_8v3:
+						{
+							buf = L"Windows 8";
+							value_length = 9;
+						}
+						break;
+
+						case WINDOWS_8_1:
+						{
+							buf = L"Windows 8.1";
+							value_length = 11;
+						}
+						break;
+
+						case WINDOWS_10:
+						{
+							buf = L"Windows 10";
+							value_length = 10;
+						}
+						break;
+
+						default:
+						{
+							buf = L"Unknown";
+							value_length = 7;
+						}
+						break;
 					}
 				}
 				break;
@@ -1281,6 +1302,12 @@ unsigned __stdcall save_csv( void *pArguments )
 
 				switch ( fi->si->system )
 				{
+					case WINDOWS_VISTA:
+					{
+						system_string = "Windows Vista";
+					}
+					break;
+
 					case WINDOWS_7:
 					{
 						system_string = "Windows 7";
@@ -1301,9 +1328,9 @@ unsigned __stdcall save_csv( void *pArguments )
 					}
 					break;
 
-					case WINDOWS_VISTA:
+					case WINDOWS_10:
 					{
-						system_string = "Windows Vista";
+						system_string = "Windows 10";
 					}
 					break;
 

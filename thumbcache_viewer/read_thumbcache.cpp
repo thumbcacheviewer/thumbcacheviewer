@@ -240,7 +240,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							break;
 						}
 					}
-					else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 )
+					else if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )
 					{
 						database_cache_entry = ( database_cache_entry_8 * )malloc( sizeof( database_cache_entry_8 ) );
 						ReadFile( hFile, database_cache_entry, sizeof( database_cache_entry_8 ), &read, NULL );
@@ -274,7 +274,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							break;
 						}
 					}
-					else	// If this is true, then the file isn't from Vista, 7, or 8 and not supported by this program.
+					else	// If this is true, then the file isn't from Vista, 7, 8, or 10 and not supported by this program.
 					{
 						free( filepath );
 
