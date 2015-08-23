@@ -62,8 +62,8 @@ IDI_ICON                ICON                    "icon.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,3,0
- PRODUCTVERSION 1,0,3,0
+ FILEVERSION 1,0,3,1
+ PRODUCTVERSION 1,0,3,1
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -80,12 +80,12 @@ BEGIN
         BEGIN
             VALUE "Comments", "Thumbcache Viewer is made free under the GPLv3 license."
             VALUE "FileDescription", "Thumbcache Viewer is a forensics tool that helps to analyze the contents of thumbcache database files."
-            VALUE "FileVersion", "1, 0, 3, 0"
+            VALUE "FileVersion", "1, 0, 3, 1"
             VALUE "InternalName", "Thumbcache Viewer"
             VALUE "LegalCopyright", "Copyright © 2011-2015 Eric Kutcher"
             VALUE "OriginalFilename", "thumbcache_viewer.exe"
             VALUE "ProductName", "Thumbcache Viewer"
-            VALUE "ProductVersion", "1, 0, 3, 0"
+            VALUE "ProductVersion", "1, 0, 3, 1"
         END
     END
     BLOCK "VarFileInfo"

@@ -212,25 +212,27 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 				case LVN_COLUMNCLICK:
 				{
+					NMLISTVIEW *nmlv = ( NMLISTVIEW * )lParam;
+
 					LVCOLUMN lvc = { NULL };
 					lvc.mask = LVCF_FMT;
-					SendMessage( g_hWnd_list_info, LVM_GETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+					SendMessage( g_hWnd_list_info, LVM_GETCOLUMN, nmlv->iSubItem, ( LPARAM )&lvc );
 					
 					if ( HDF_SORTUP & lvc.fmt )	// Column is sorted upward.
 					{
 						// Sort down
 						lvc.fmt = lvc.fmt & ( ~HDF_SORTUP ) | HDF_SORTDOWN;
-						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, ( WPARAM )( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, ( WPARAM )nmlv->iSubItem, ( LPARAM )&lvc );
 
-						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
+						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, nmlv->iSubItem, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
 					}
 					else if ( HDF_SORTDOWN & lvc.fmt )	// Column is sorted downward.
 					{
 						// Sort up
 						lvc.fmt = lvc.fmt & ( ~HDF_SORTDOWN ) | HDF_SORTUP;
-						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, nmlv->iSubItem, ( LPARAM )&lvc );
 
-						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem + 2, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
+						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, nmlv->iSubItem + 2, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
 					}
 					else	// Column has no sorting set.
 					{
@@ -245,12 +247,12 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 
 						// Read current the format from the clicked column
-						SendMessage( g_hWnd_list_info, LVM_GETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+						SendMessage( g_hWnd_list_info, LVM_GETCOLUMN, nmlv->iSubItem, ( LPARAM )&lvc );
 						// Sort down to start.
 						lvc.fmt = lvc.fmt | HDF_SORTDOWN;
-						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )&lvc );
+						SendMessage( g_hWnd_list_info, LVM_SETCOLUMN, nmlv->iSubItem, ( LPARAM )&lvc );
 
-						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, ( ( NMLISTVIEW * )lParam )->iSubItem, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
+						SendMessage( g_hWnd_list_info, LVM_SORTITEMS, nmlv->iSubItem, ( LPARAM )( PFNLVCOMPARE )InfoCompareFunc );
 					}
 				}
 				break;
