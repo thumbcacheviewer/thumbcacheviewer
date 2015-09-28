@@ -102,7 +102,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	wcex.hbrBackground  = ( HBRUSH )( COLOR_WINDOW );
 	wcex.lpszMenuName   = NULL;
 	wcex.lpszClassName  = L"thumbcache";
-	wcex.hIconSm        = LoadIcon( wcex.hInstance, MAKEINTRESOURCE( IDI_APPLICATION ) );
+	wcex.hIconSm        = NULL;
 
 	if ( !RegisterClassEx( &wcex ) )
 	{
@@ -139,6 +139,18 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	wcex.lpfnWndProc    = PropertyWndProc;
 	wcex.lpszClassName  = L"property";
+
+	if ( !RegisterClassEx( &wcex ) )
+	{
+		fail_type = 1;
+		goto CLEANUP;
+	}
+
+	wcex.hIcon			= NULL;
+	wcex.hbrBackground  = ( HBRUSH )( COLOR_WINDOWFRAME );
+
+	wcex.lpfnWndProc    = ScanTabWndProc;
+	wcex.lpszClassName  = L"scan_tab";
 
 	if ( !RegisterClassEx( &wcex ) )
 	{

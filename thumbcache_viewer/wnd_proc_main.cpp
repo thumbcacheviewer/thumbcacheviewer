@@ -510,7 +510,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						{
 							bi.lpszTitle = L"Select a location to save the selected file(s).";
 						}
-						bi.ulFlags = BIF_EDITBOX | BIF_VALIDATE;
+						bi.ulFlags = BIF_EDITBOX | BIF_NEWDIALOGSTYLE | BIF_VALIDATE;
+
+						OleInitialize( NULL );
 
 						LPITEMIDLIST lpiidl = SHBrowseForFolder( &bi );
 						if ( lpiidl )
@@ -529,6 +531,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
 						}
+
+						OleUninitialize();
 					}
 					break;
 
@@ -638,7 +642,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.1\r\n\r\nCopyright \xA9 2011-2015 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.2\r\n\r\nCopyright \xA9 2011-2015 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1455,9 +1459,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			fileinfo *fi = NULL;
 
 			// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
-			for ( int i = 0; i < item_count; ++i )
+			for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 			{
-				lvi.iItem = i;
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 				fi = ( fileinfo * )lvi.lParam;

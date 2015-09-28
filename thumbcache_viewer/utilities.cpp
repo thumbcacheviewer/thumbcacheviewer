@@ -334,7 +334,7 @@ void create_fileinfo_tree()
 	}
 
 	// Go through each item and add them to our tree.
-	for ( int i = 0; i < item_count; ++i )
+	for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 	{
 		// We don't want to continue scanning if the user cancels the scan.
 		if ( g_kill_scan == true )
@@ -342,7 +342,6 @@ void create_fileinfo_tree()
 			break;
 		}
 
-		lvi.iItem = i;
 		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 		fi = ( fileinfo * )lvi.lParam;
@@ -777,7 +776,7 @@ unsigned __stdcall remove_items( void *pArguments )
 	if ( item_count == sel_count )
 	{
 		// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
-		for ( int i = 0; i < item_count; ++i )
+		for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 		{
 			// Stop processing and exit the thread.
 			if ( g_kill_thread == true )
@@ -786,7 +785,6 @@ unsigned __stdcall remove_items( void *pArguments )
 			}
 
 			// We first need to get the lParam value otherwise the memory won't be freed.
-			lvi.iItem = i;
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 			fi = ( fileinfo * )lvi.lParam;
@@ -949,7 +947,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 		SendMessage( g_hWnd_list, LVM_ENSUREVISIBLE, 0, FALSE );
 
 		// Start from the end and work our way to the beginning.
-		for ( int i = item_count - 1; i >= 0; --i )
+		for ( lvi.iItem = item_count - 1; lvi.iItem >= 0; --lvi.iItem )
 		{
 			// Stop processing and exit the thread.
 			if ( g_kill_thread == true )
@@ -957,7 +955,6 @@ unsigned __stdcall show_hide_items( void *pArguments )
 				break;
 			}
 
-			lvi.iItem = i;
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 			// If the list item is blank, then add it to the blank entry linked list.
@@ -970,7 +967,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 				g_be = be;
 
 				// Remove the list item.
-				SendMessage( g_hWnd_list, LVM_DELETEITEM, i, 0 );
+				SendMessage( g_hWnd_list, LVM_DELETEITEM, lvi.iItem, 0 );
 			}
 		}
 	}
@@ -1019,7 +1016,7 @@ unsigned __stdcall verify_checksums( void *pArguments )
 	int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 
 	// Go through each item to compare values.
-	for ( int i = 0; i < item_count; ++i )
+	for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 	{
 		// Stop processing and exit the thread.
 		if ( g_kill_thread == true )
@@ -1027,7 +1024,6 @@ unsigned __stdcall verify_checksums( void *pArguments )
 			break;
 		}
 
-		lvi.iItem = i;
 		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 		fi = ( fileinfo * )lvi.lParam;
@@ -1267,7 +1263,7 @@ unsigned __stdcall save_csv( void *pArguments )
 			fileinfo *fi = NULL;
 
 			// Go through all the items we'll be saving.
-			for ( int i = 0; i < save_items; ++i )
+			for ( lvi.iItem = 0; lvi.iItem < save_items; ++lvi.iItem )
 			{
 				// Stop processing and exit the thread.
 				if ( g_kill_thread == true )
@@ -1275,7 +1271,6 @@ unsigned __stdcall save_csv( void *pArguments )
 					break;
 				}
 
-				lvi.iItem = i;
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 				fi = ( fileinfo * )lvi.lParam;
