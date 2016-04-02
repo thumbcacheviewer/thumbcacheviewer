@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2013 Eric Kutcher
+    Copyright (C) 2011-2016 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -170,7 +170,8 @@ int wmain( int argc, wchar_t *argv[] )
 	wchar_t output_path[ MAX_PATH ] = { 0 };
 	if ( argc == 1 )
 	{
-		printf( "Please enter the name of the database: " );
+		printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.6\nCopyright (c) 2011-2016 Eric Kutcher\n\n" \
+				"Please enter the path to the thumbcache database: " );
 		fgetws( name, MAX_PATH, stdin );
 
 		// Remove the newline character if it was appended.
@@ -216,7 +217,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 		while ( getwchar() != L'\n' );		// Clear the input buffer.
 
-		printf( "Please enter a path to output the database files (Press Enter for the current directory): " );
+		printf( "Please enter a path to output the thumbcache database files (Press Enter for the current directory): " );
 		fgetws( output_path, MAX_PATH, stdin );
 
 		// Remove the newline character if it was appended.
@@ -283,7 +284,7 @@ int wmain( int argc, wchar_t *argv[] )
 					case 'h':
 					case 'H':
 					{
-						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.5\nCopyright (c) 2011-2015 Eric Kutcher\n\n" \
+						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.6\nCopyright (c) 2011-2016 Eric Kutcher\n\n" \
 								"thumbcache_viewer_cmd [-o directory][-w][-c][-z][-n] thumbcache_*.db\n" \
 								" -o\tSet the output directory for thumbnails and reports.\n" \
 								" -w\tGenerate an HTML report.\n" \
@@ -297,7 +298,7 @@ int wmain( int argc, wchar_t *argv[] )
 					case 'a':
 					case 'A':
 					{
-						printf( "\nThumbcache Viewer is made free under the GPLv3 license.\nCopyright (c) 2011-2013 Eric Kutcher\n" );
+						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.6\nCopyright (c) 2011-2016 Eric Kutcher\n" );
 						return 0;
 					}
 					break;
@@ -306,7 +307,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 	}
 
-	printf( "Attempting to open the database file.\n" );
+	printf( "Attempting to open the thumbcache database.\n" );
 
 	// Attempt to open our database file.
 	HANDLE hFile = CreateFile( name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -369,7 +370,7 @@ int wmain( int argc, wchar_t *argv[] )
 		else
 		{
 			CloseHandle( hFile );
-			printf( "Database is not supported.\n" );
+			printf( "The thumbcache database version is not supported.\n" );
 			return 0;
 		}
 
@@ -657,8 +658,8 @@ int wmain( int argc, wchar_t *argv[] )
 					sprintf_s( entries, 11, "Unknown" );
 				}
 
-				char *buf = ( char * )malloc( sizeof( char ) * ( utf8_name_length + utf8_path_length + 567 ) );
-				int write_size = sprintf_s( buf, utf8_name_length + utf8_path_length + 567,
+				char *buf = ( char * )malloc( sizeof( char ) * ( utf8_name_length + utf8_path_length + 566 ) );
+				int write_size = sprintf_s( buf, utf8_name_length + utf8_path_length + 566,
 								"<html><head><title>HTML Report</title></head><body>Filename: %s<br />" \
 								"Version: %s<br />" \
 								"Type: %s<br />" \
@@ -666,7 +667,7 @@ int wmain( int argc, wchar_t *argv[] )
 								"Offset to available cache entry (bytes): %lu<br />" \
 								"Number of cache entries: %s<br />" \
 								"Output path: %s\\<br /><br />" \
-								"<table border=1 cellspacing=0><tr><td>Index</td><td>Offset (bytes)</td><td>Cache Size (bytes)</td><td>Data Size (bytes)</td>%s<td>Entry Hash</td><td>Data Checksum</td><td>Header Checksum</td><td>Indentifier String</td><td>Image</td></tr>",
+								"<table border=1 cellspacing=0><tr><td>Index</td><td>Offset (bytes)</td><td>Cache Size (bytes)</td><td>Data Size (bytes)</td>%s<td>Entry Hash</td><td>Data Checksum</td><td>Header Checksum</td><td>Identifier String</td><td>Image</td></tr>",
 								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : ( dh.version == WINDOWS_10 ? "Windows 10" : "Windows 8" ) ) ) ),
 								( dh.version == WINDOWS_VISTA || dh.version == WINDOWS_7 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
@@ -709,8 +710,8 @@ int wmain( int argc, wchar_t *argv[] )
 					sprintf_s( entries, 11, "Unknown" );
 				}
 
-				char *buf = ( char * )malloc( sizeof( char ) * ( utf8_name_length + utf8_path_length + 357 ) );
-				int write_size = sprintf_s( buf, utf8_name_length + utf8_path_length + 357,
+				char *buf = ( char * )malloc( sizeof( char ) * ( utf8_name_length + utf8_path_length + 356 ) );
+				int write_size = sprintf_s( buf, utf8_name_length + utf8_path_length + 356,
 								"Filename,\"%s\"\r\n" \
 								"Version,%s\r\n" \
 								"Type,%s\r\n" \
@@ -718,7 +719,7 @@ int wmain( int argc, wchar_t *argv[] )
 								"Offset to available cache entry (bytes),%lu\r\n" \
 								"Number of cache entries,%s\r\n" \
 								"Output path,\"%s\\\"\r\n\r\n" \
-								"Index,Offset (bytes),Cache Size (bytes),Data Size (bytes),%sEntry Hash,Data Checksum,Header Checksum,Indentifier String\r\n",
+								"Index,Offset (bytes),Cache Size (bytes),Data Size (bytes),%sEntry Hash,Data Checksum,Header Checksum,Identifier String\r\n",
 								utf8_name, ( dh.version == WINDOWS_VISTA ? "Windows Vista" : ( dh.version == WINDOWS_7 ? "Windows 7" : ( dh.version == WINDOWS_8_1 ? "Windows 8.1" : ( dh.version == WINDOWS_10 ? "Windows 10" : "Windows 8" ) ) ) ),
 								( dh.version == WINDOWS_VISTA || dh.version == WINDOWS_7 ) ? \
 								( dh.type == 0x00 ? "thumbcache_32.db" : ( dh.type == 0x01 ? "thumbcache_96.db" : ( dh.type == 0x02 ? "thumbcache_256.db" : ( dh.type == 0x03 ? "thumbcache_1024.db" : ( dh.type == 0x04 ? "thumbcache_sr.db" : "Unknown" ) ) ) ) ) : \
@@ -1030,48 +1031,6 @@ int wmain( int argc, wchar_t *argv[] )
 			char *utf8_filename = NULL;
 			int utf8_filename_length = 0;
 
-			// Write the entry to a new table row in the HTML report file.
-			if ( output_html == true && ( skip_blank == false || ( skip_blank == true && data_size > 0 ) ) )
-			{
-				char buf[ 196 ];
-				int write_size = 0;
-				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )	// Windows 8/8.1/10 includes dimensions (width x height)
-				{
-					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%lux%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
-				}
-				else
-				{
-					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, s_entry_hash, s_data_checksum, s_header_checksum );
-				}
-				WriteFile( hFile_html, buf, write_size, &written, NULL );
-
-				utf8_filename_length = WideCharToMultiByte( CP_UTF8, 0, filename, -1, NULL, 0, NULL, NULL );
-				utf8_filename = ( char * )malloc( sizeof( char ) * utf8_filename_length );	// Includes NULL character.
-				WideCharToMultiByte( CP_UTF8, 0, filename, -1, utf8_filename, utf8_filename_length, NULL, NULL );
-				WriteFile( hFile_html, utf8_filename, utf8_filename_length - 1, &written, NULL );
-
-				// If there's an image we want to extract, then insert it into the last column.
-				if ( data_size != 0 && extract_thumbnails == true )
-				{
-					char *out_buf = ( char * )malloc( sizeof( char ) * ( utf8_filename_length + 33 ) );
-					write_size = sprintf_s( out_buf, utf8_filename_length + 33, "</td><td><img src=\"%s\" /></td></tr>", utf8_filename );
-
-					WriteFile( hFile_html, out_buf, write_size, &written, NULL );
-
-					free( out_buf );
-				}
-				else	// Otherwise, the column will remain empty.
-				{
-					WriteFile( hFile_html, "</td><td></td></tr>", 19, &written, NULL );
-				}
-
-				// Save the filename if we're going to output a cvs file. Cuts down on the number of conversions.
-				if ( output_csv == false )
-				{
-					free( utf8_filename );
-				}
-			}
-
 			// Write the entry to a new line in the CSV report file.
 			if ( output_csv == true && ( skip_blank == false || ( skip_blank == true && data_size > 0 ) ) )
 			{
@@ -1087,18 +1046,81 @@ int wmain( int argc, wchar_t *argv[] )
 				}
 				WriteFile( hFile_csv, buf, write_size, &written, NULL );
 
-				if ( utf8_filename == NULL )
-				{
-					utf8_filename_length = WideCharToMultiByte( CP_UTF8, 0, filename, -1, NULL, 0, NULL, NULL );
-					utf8_filename = ( char * )malloc( sizeof( char ) * utf8_filename_length );	// Includes NULL character.
-					WideCharToMultiByte( CP_UTF8, 0, filename, -1, utf8_filename, utf8_filename_length, NULL, NULL );
-				}
+				utf8_filename_length = WideCharToMultiByte( CP_UTF8, 0, filename, -1, NULL, 0, NULL, NULL );
+				utf8_filename = ( char * )malloc( sizeof( char ) * utf8_filename_length );	// Includes NULL character.
+				WideCharToMultiByte( CP_UTF8, 0, filename, -1, utf8_filename, utf8_filename_length, NULL, NULL );
 
 				char *out_buf = ( char * )malloc( sizeof( char ) * ( utf8_filename_length + 3 ) );
 				write_size = sprintf_s( out_buf, utf8_filename_length + 3, "%s\"\r\n", utf8_filename );
 				WriteFile( hFile_csv, out_buf, write_size, &written, NULL );
 
 				free( out_buf );
+
+				// Save the filename if we're going to output an html file. Cuts down on the number of conversions.
+				if ( output_html == false )
+				{
+					free( utf8_filename );
+				}
+			}
+
+			// Write the entry to a new table row in the HTML report file.
+			if ( output_html == true && ( skip_blank == false || ( skip_blank == true && data_size > 0 ) ) )
+			{
+				char buf[ 196 ];
+				int write_size = 0;
+				if ( dh.version == WINDOWS_8 || dh.version == WINDOWS_8v2 || dh.version == WINDOWS_8v3 || dh.version == WINDOWS_8_1 || dh.version == WINDOWS_10 )	// Windows 8/8.1/10 includes dimensions (width x height)
+				{
+					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%lux%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, ( ( database_cache_entry_8 * )database_cache_entry )->width, ( ( database_cache_entry_8 * )database_cache_entry )->height, s_entry_hash, s_data_checksum, s_header_checksum );
+				}
+				else
+				{
+					write_size = sprintf_s( buf, 196, "<tr><td>%lu</td><td>%lu</td><td>%lu</td><td>%lu</td><td>%s</td><td>%s</td><td>%s</td><td>", i + 1, file_offset, cache_entry_size, data_size, s_entry_hash, s_data_checksum, s_header_checksum );
+				}
+				WriteFile( hFile_html, buf, write_size, &written, NULL );
+
+				if ( utf8_filename == NULL )
+				{
+					utf8_filename_length = WideCharToMultiByte( CP_UTF8, 0, filename, -1, NULL, 0, NULL, NULL );
+					utf8_filename = ( char * )malloc( sizeof( char ) * utf8_filename_length );	// Includes NULL character.
+					WideCharToMultiByte( CP_UTF8, 0, filename, -1, utf8_filename, utf8_filename_length, NULL, NULL );
+				}
+				WriteFile( hFile_html, utf8_filename, utf8_filename_length - 1, &written, NULL );
+
+				// If there's an image we want to extract, then insert it into the last column.
+				if ( data_size != 0 && extract_thumbnails == true )
+				{
+					// Replace any invalid filename characters with an underscore "_".
+					char *filename_ptr = utf8_filename;
+					while( filename_ptr != NULL && *filename_ptr != NULL )
+					{
+						if ( *filename_ptr == '\\' ||
+							 *filename_ptr == '/' ||
+							 *filename_ptr == ':' ||
+							 *filename_ptr == '*' ||
+							 *filename_ptr == '?' ||
+							 *filename_ptr == '\"' ||
+							 *filename_ptr == '<' ||
+							 *filename_ptr == '>' ||
+							 *filename_ptr == '|' )
+						{
+							*filename_ptr = '_';
+						}
+
+						++filename_ptr;
+					}
+
+					char *out_buf = ( char * )malloc( sizeof( char ) * ( utf8_filename_length + 33 ) );
+					write_size = sprintf_s( out_buf, utf8_filename_length + 33, "</td><td><img src=\"%s\" /></td></tr>", utf8_filename );
+
+					WriteFile( hFile_html, out_buf, write_size, &written, NULL );
+
+					free( out_buf );
+				}
+				else	// Otherwise, the column will remain empty.
+				{
+					WriteFile( hFile_html, "</td><td></td></tr>", 19, &written, NULL );
+				}
+
 				free( utf8_filename );
 			}
 
@@ -1106,6 +1128,26 @@ int wmain( int argc, wchar_t *argv[] )
 			printf( "---------------------------------------------\n" );
 			if ( data_size != 0 && extract_thumbnails == true )
 			{
+				// Replace any invalid filename characters with an underscore "_".
+				wchar_t *filename_ptr = filename;
+				while( filename_ptr != NULL && *filename_ptr != NULL )
+				{
+					if ( *filename_ptr == L'\\' ||
+						 *filename_ptr == L'/' ||
+						 *filename_ptr == L':' ||
+						 *filename_ptr == L'*' ||
+						 *filename_ptr == L'?' ||
+						 *filename_ptr == L'\"' ||
+						 *filename_ptr == L'<' ||
+						 *filename_ptr == L'>' ||
+						 *filename_ptr == L'|' )
+					{
+						*filename_ptr = L'_';
+					}
+
+					++filename_ptr;
+				}
+
 				printf( "Writing data to file.\n" );
 				// Attempt to save the buffer to a file.
 				HANDLE hFile_save = CreateFile( filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
@@ -1162,11 +1204,11 @@ int wmain( int argc, wchar_t *argv[] )
 		// See if they typed an incorrect filename.
 		if ( GetLastError() == ERROR_FILE_NOT_FOUND )
 		{
-			printf( "The database file does not exist.\n" );
+			printf( "The thumbcache database does not exist.\n" );
 		}
 		else	// For all other errors, it probably failed to open.
 		{
-			printf( "The database file failed to open.\n" );
+			printf( "The thumbcache database failed to open.\n" );
 		}
 	}
 
