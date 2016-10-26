@@ -170,7 +170,7 @@ int wmain( int argc, wchar_t *argv[] )
 	wchar_t output_path[ MAX_PATH ] = { 0 };
 	if ( argc == 1 )
 	{
-		printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.6\nCopyright (c) 2011-2016 Eric Kutcher\n\n" \
+		printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.7\nCopyright (c) 2011-2016 Eric Kutcher\n\n" \
 				"Please enter the path to the thumbcache database: " );
 		fgetws( name, MAX_PATH, stdin );
 
