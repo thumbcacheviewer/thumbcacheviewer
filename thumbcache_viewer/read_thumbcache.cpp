@@ -88,13 +88,13 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 		do
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				break;
 			}
 
 			// Construct the filepath for each file.
-			if ( construct_filepath == true )
+			if ( construct_filepath )
 			{
 				fname_length = wcslen( fname ) + 1;	// Include '\' character or NULL character
 
@@ -151,7 +151,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 				while ( true )
 				{
 					// Stop processing and exit the thread.
-					if ( g_kill_thread == true )
+					if ( g_kill_thread )
 					{
 						free( filepath );
 
@@ -196,7 +196,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
+							if ( scan_memory( hFile, current_position ) )
 							{
 								continue;
 							}
@@ -229,7 +229,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
+							if ( scan_memory( hFile, current_position ) )
 							{
 								continue;
 							}
@@ -263,7 +263,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 							current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 							// If we found the beginning of the entry, attempt to read it again.
-							if ( scan_memory( hFile, current_position ) == true )
+							if ( scan_memory( hFile, current_position ) )
 							{
 								continue;
 							}
@@ -495,7 +495,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					fi->si = si;
 
 					// Add blank entries to our blank entries linked list.
-					if ( hide_blank_entries == true && fi->size == 0 )
+					if ( hide_blank_entries && fi->size == 0 )
 					{
 						linked_list *be = ( linked_list * )malloc( sizeof( linked_list ) );
 						be->fi = fi;
@@ -520,7 +520,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 				// Close the input file.
 				CloseHandle( hFile );
 
-				if ( next_file == true )
+				if ( next_file )
 				{
 					continue;
 				}
@@ -534,7 +534,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 			// Free the old filepath.
 			free( filepath );
 		}
-		while ( construct_filepath == true && *fname != L'\0' );
+		while ( construct_filepath && *fname != L'\0' );
 
 		// Save the files or a CSV if the user specified an output directory through the command-line.
 		if ( pi->output_path != NULL )

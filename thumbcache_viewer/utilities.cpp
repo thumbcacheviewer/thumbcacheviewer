@@ -44,7 +44,7 @@ bool is_close( int a, int b )
 
 void Processing_Window( bool enable )
 {
-	if ( enable == true )
+	if ( enable )
 	{
 		SetWindowTextA( g_hWnd_main, "Thumbcache Viewer - Please wait..." );	// Update the window title.
 		EnableWindow( g_hWnd_list, FALSE );										// Prevent any interaction with the listview while we're processing.
@@ -337,7 +337,7 @@ void create_fileinfo_tree()
 	for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 	{
 		// We don't want to continue scanning if the user cancels the scan.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}
@@ -478,12 +478,12 @@ unsigned __stdcall copy_items( void *pArguments )
 	for ( int i = 0; i < item_count; ++i )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_thread == true )
+		if ( g_kill_thread )
 		{
 			break;
 		}
 
-		if ( copy_all == true )
+		if ( copy_all )
 		{
 			lvi.iItem = i;
 		}
@@ -538,7 +538,7 @@ unsigned __stdcall copy_items( void *pArguments )
 					buf = tbuf;	// Reset the buffer pointer.
 
 					// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset == true ? fi->header_offset : fi->header_offset / 1024 ) );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset ? fi->header_offset : fi->header_offset / 1024 ) );
 				}
 				break;
 
@@ -547,32 +547,32 @@ unsigned __stdcall copy_items( void *pArguments )
 					unsigned int cache_entry_size = fi->size + ( fi->data_offset - fi->header_offset );
 
 					// Depending on our toggle, output the size in either kilobytes or bytes.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size == true ? cache_entry_size / 1024 : cache_entry_size ) );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size ? cache_entry_size / 1024 : cache_entry_size ) );
 				}
 				break;
 
 				case 4:
 				{
 					// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset == true ? fi->data_offset : fi->data_offset / 1024 ) );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset ? fi->data_offset : fi->data_offset / 1024 ) );
 				}
 				break;
 
 				case 5:
 				{
 					// Depending on our toggle, output the size in either kilobytes or bytes.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size == true ? fi->size / 1024 : fi->size ) );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size ? fi->size / 1024 : fi->size ) );
 				}
 				break;
 
 				case 6:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"%016llx" : L"%016llX" ), fi->data_checksum );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_dc_lower ? L"%016llx" : L"%016llX" ), fi->data_checksum );
 
 					if ( fi->v_data_checksum != fi->data_checksum )
 					{
-						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_dc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_dc_lower ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
 					}
 				}
 				break;
@@ -580,11 +580,11 @@ unsigned __stdcall copy_items( void *pArguments )
 				case 7:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"%016llx" : L"%016llX" ), fi->header_checksum );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_hc_lower ? L"%016llx" : L"%016llX" ), fi->header_checksum );
 
 					if ( fi->v_header_checksum != fi->header_checksum )
 					{
-						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_hc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
+						value_length = swprintf_s( buf + value_length, MAX_PATH - value_length, ( is_hc_lower ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
 					}
 				}
 				break;
@@ -592,7 +592,7 @@ unsigned __stdcall copy_items( void *pArguments )
 				case 8:
 				{
 					// Output the hex string in either lowercase or uppercase.
-					value_length = swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"%016llx" : L"%016llX" ), fi->entry_hash );
+					value_length = swprintf_s( buf, MAX_PATH, ( is_eh_lower ? L"%016llx" : L"%016llX" ), fi->entry_hash );
 				}
 				break;
 
@@ -665,7 +665,7 @@ unsigned __stdcall copy_items( void *pArguments )
 				continue;
 			}
 
-			if ( ( ( type != 1 && j > 1 ) || ( type == 1 && j > 0 ) ) && add_tab == true )
+			if ( ( ( type != 1 && j > 1 ) || ( type == 1 && j > 0 ) ) && add_tab )
 			{
 				*( copy_buffer + buffer_offset ) = L'\t';
 				++buffer_offset;
@@ -690,14 +690,14 @@ unsigned __stdcall copy_items( void *pArguments )
 			add_newline = true;
 		}
 
-		if ( i < item_count - 1 && add_newline == true )	// Add newlines for every item except the last.
+		if ( i < item_count - 1 && add_newline )	// Add newlines for every item except the last.
 		{
 			*( copy_buffer + buffer_offset ) = L'\r';
 			++buffer_offset;
 			*( copy_buffer + buffer_offset ) = L'\n';
 			++buffer_offset;
 		}
-		else if ( ( i == item_count - 1 && add_newline == false ) && buffer_offset >= 2 )	// If add_newline is false for the last item, then a newline character is in the buffer.
+		else if ( ( i == item_count - 1 && !add_newline ) && buffer_offset >= 2 )	// If add_newline is false for the last item, then a newline character is in the buffer.
 		{
 			buffer_offset -= 2;	// Ignore the last newline in the buffer.
 		}
@@ -779,7 +779,7 @@ unsigned __stdcall remove_items( void *pArguments )
 		for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				break;
 			}
@@ -837,7 +837,7 @@ unsigned __stdcall remove_items( void *pArguments )
 		for ( int i = 0; i < sel_count; i++ )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				break;
 			}
@@ -912,7 +912,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 
 	int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 
-	if ( hide_blank_entries == false )	// Display the blank entries.
+	if ( !hide_blank_entries )	// Display the blank entries.
 	{
 		// This will reinsert the blank entry at the end of the listview.
 		linked_list *be = g_be;
@@ -921,7 +921,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 		while ( be != NULL )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				g_be = be;	// Reset the global blank entries list to free in WM_DESTORY.
 
@@ -950,7 +950,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 		for ( lvi.iItem = item_count - 1; lvi.iItem >= 0; --lvi.iItem )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				break;
 			}
@@ -1019,7 +1019,7 @@ unsigned __stdcall verify_checksums( void *pArguments )
 	for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_thread == true )
+		if ( g_kill_thread )
 		{
 			break;
 		}
@@ -1266,7 +1266,7 @@ unsigned __stdcall save_csv( void *pArguments )
 			for ( lvi.iItem = 0; lvi.iItem < save_items; ++lvi.iItem )
 			{
 				// Stop processing and exit the thread.
-				if ( g_kill_thread == true )
+				if ( g_kill_thread )
 				{
 					break;
 				}
@@ -1444,7 +1444,7 @@ unsigned __stdcall save_items( void *pArguments )
 		}
 
 		// Depending on what was selected, get the number of items we'll be saving.
-		int save_items = ( save_type->save_all == true ? SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) : SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) );
+		int save_items = ( save_type->save_all ? SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 ) : SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 ) );
 
 		// Retrieve the lParam value from the selected listview item.
 		LVITEM lvi = { NULL };
@@ -1457,12 +1457,12 @@ unsigned __stdcall save_items( void *pArguments )
 		for ( int i = 0; i < save_items; ++i )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_thread == true )
+			if ( g_kill_thread )
 			{
 				break;
 			}
 
-			lvi.iItem = ( save_type->save_all == true ? i : SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED ) );
+			lvi.iItem = ( save_type->save_all ? i : SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED ) );
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 			fi = ( fileinfo * )lvi.lParam;

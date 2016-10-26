@@ -63,6 +63,8 @@ LRESULT CALLBACK PropertyWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 			ShowWindow( hWnd, SW_HIDE );
 
 			SendMessage( g_hWnd_edit_property_value, WM_SETTEXT, 0, 0 );
+
+			return 0;
 		}
 		break;
 

@@ -86,7 +86,7 @@ void convert_values( extended_info **ei )
 	for ( unsigned long i = 0; i < g_column_count; ++i )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}
@@ -220,7 +220,7 @@ void convert_values( extended_info **ei )
 						unsigned long long val = 0;
 						memcpy_s( &val, sizeof( unsigned long long ), t_ci->data, sizeof( unsigned long long ) );
 
-						if ( g_use_big_endian == true )
+						if ( g_use_big_endian )
 						{
 							val = ntohll( val );
 						}
@@ -277,7 +277,7 @@ void convert_values( extended_info **ei )
 							}
 							else
 							{
-								if ( t_ci->JetCompress == false )
+								if ( !t_ci->JetCompress )
 								{
 									// Handle 8 byte values. For everything else, fall through.
 									if ( g_rc_array[ i ].cbActual == sizeof( unsigned long long ) )
@@ -342,7 +342,7 @@ void convert_values( extended_info **ei )
 						else
 						{
 							// On Vista, if Type == ( VT_VECTOR | VT_LPWSTR ), then the first 2 bytes (little-endian) = array count?
-							if ( t_ci->JetCompress == true )
+							if ( t_ci->JetCompress )
 							{
 								// Make a copy first because we may need to reuse t_ci->data and don't want it modified.
 								unsigned char *data_copy = ( unsigned char * )malloc( sizeof( unsigned char ) * g_rc_array[ i ].cbActual );
@@ -745,7 +745,7 @@ JET_ERR get_column_info()
 	while ( true )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}
@@ -886,7 +886,7 @@ JET_ERR get_column_info_win8()
 	while ( true )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}
@@ -923,7 +923,7 @@ JET_ERR get_column_info_win8()
 		}
 	}
 
-	if ( found_index == true )
+	if ( found_index )
 	{
 		// This table has all of the Windows Properties and their values.
 		if ( ( g_err = open_table( "SystemIndex_PropertyStore", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
@@ -933,7 +933,7 @@ JET_ERR get_column_info_win8()
 		while ( true )
 		{
 			// Stop processing and exit the thread.
-			if ( g_kill_scan == true )
+			if ( g_kill_scan )
 			{
 				break;
 			}
@@ -1066,7 +1066,7 @@ void build_retrieve_column_array()
 	for ( unsigned long i = 0; i < g_column_count; ++i )
 	{
 		// Stop processing and exit the thread.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}

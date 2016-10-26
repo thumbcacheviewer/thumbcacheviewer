@@ -300,7 +300,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			// Allow our main window to attach to the image window.
 			GetWindowRect( g_hWnd_image, &wa );
-			if ( is_attached == false && IsWindowVisible( g_hWnd_image ) )
+			if ( !is_attached && IsWindowVisible( g_hWnd_image ) == TRUE )
 			{
 				if( is_close( rc->right, wa.left ) )			// Attach to left side of image window.
 				{
@@ -342,13 +342,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			}
 
 			// See if our image window is visible
-			if ( IsWindowVisible( g_hWnd_image ) )
+			if ( IsWindowVisible( g_hWnd_image ) == TRUE )
 			{
 				// If it's attached, then move it in proportion to our main window.
-				if ( is_attached == true )
+				if ( is_attached )
 				{
 					// If our main window attached itself to the image window, then we'll skip moving the image window.
-					if ( skip_main == true )
+					if ( skip_main )
 					{
 						// Moves the image window with the main window.
 						MoveWindow( g_hWnd_image, wa.left + ( rc->left - last_pos.left ), wa.top + ( rc->top - last_pos.top ), wa.right - wa.left, wa.bottom - wa.top, FALSE );
@@ -594,7 +594,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					case MENU_REMOVE_SEL:
 					{
 						// Hide the image window since the selected item will be deleted.
-						if ( IsWindowVisible( g_hWnd_image ) )
+						if ( IsWindowVisible( g_hWnd_image ) == TRUE )
 						{
 							ShowWindow( g_hWnd_image, SW_HIDE );
 						}
@@ -642,7 +642,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.3\r\n\r\nCopyright \xA9 2011-2016 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.4\r\n\r\nCopyright \xA9 2011-2016 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -667,7 +667,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					NMLVKEYDOWN *nmlvkd = ( NMLVKEYDOWN * )lParam;
 
 					// Make sure the control key is down and that we're not already in a worker thread. Prevents threads from queuing in case the user falls asleep on their keyboard.
-					if ( GetKeyState( VK_CONTROL ) & 0x8000 && in_thread == false )
+					if ( GetKeyState( VK_CONTROL ) & 0x8000 && !in_thread )
 					{
 						// Determine which key was pressed.
 						switch ( nmlvkd->wVKey )
@@ -906,7 +906,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					NMLISTVIEW *nmlv = ( NMLISTVIEW * )lParam;
 
-					if ( in_thread == false )
+					if ( !in_thread )
 					{
 						UpdateMenus( UM_ENABLE );
 					}
@@ -958,10 +958,10 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						gdi_image = new Gdiplus::Image( is );
 						is->Release();
 
-						if ( !IsWindowVisible( g_hWnd_image ) )
+						if ( IsWindowVisible( g_hWnd_image ) == FALSE )
 						{
 							// Move our image window next to the main window on its right side if it's the first time we're showing the image window.
-							if ( first_show == false )
+							if ( !first_show )
 							{
 								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right, last_pos.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
 								first_show = true;
@@ -1144,7 +1144,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				bool selected = false;
 				if ( dis->itemState & ( ODS_FOCUS || ODS_SELECTED ) )
 				{
-					if ( skip_draw == true )
+					if ( skip_draw )
 					{
 						return TRUE;	// Don't draw selected items because their lParam values are being deleted.
 					}
@@ -1196,7 +1196,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset == true ? fi->header_offset : fi->header_offset / 1024 ) );
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_offset ? L"%d B" : L"%d KB" ), ( is_kbytes_c_offset ? fi->header_offset : fi->header_offset / 1024 ) );
 						}
 						break;
 
@@ -1207,7 +1207,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							unsigned int cache_entry_size = fi->size + ( fi->data_offset - fi->header_offset );
 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
-							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size == true ? cache_entry_size / 1024 : cache_entry_size ) );
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_c_size ? L"%d KB" : L"%d B" ), ( is_kbytes_c_size ? cache_entry_size / 1024 : cache_entry_size ) );
 						}
 						break;
 
@@ -1216,7 +1216,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the offset (db location) in either kilobytes or bytes.
-							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset == true ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset == true ? fi->data_offset : fi->data_offset / 1024 ) );
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_offset ? L"%d B" : L"%d KB" ), ( is_kbytes_d_offset ? fi->data_offset : fi->data_offset / 1024 ) );
 						}
 						break;
 
@@ -1225,18 +1225,18 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							RIGHT_COLUMNS = DT_RIGHT;
 
 							// Depending on our toggle, output the size in either kilobytes or bytes.
-							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size == true ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size == true ? fi->size / 1024 : fi->size ) );
+							swprintf_s( buf, MAX_PATH, ( is_kbytes_d_size ? L"%d KB" : L"%d B" ), ( is_kbytes_d_size ? fi->size / 1024 : fi->size ) );
 						}
 						break;
 
 						case 6:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							int out = swprintf_s( buf, MAX_PATH, ( is_dc_lower == true ? L"%016llx" : L"%016llX" ), fi->data_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_dc_lower ? L"%016llx" : L"%016llX" ), fi->data_checksum );
 
 							if ( fi->v_data_checksum != fi->data_checksum )
 							{
-								swprintf_s( buf + out, MAX_PATH - out, ( is_dc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
+								swprintf_s( buf + out, MAX_PATH - out, ( is_dc_lower ? L" : %016llx" : L" : %016llX" ), fi->v_data_checksum );
 							}
 						}
 						break;
@@ -1244,11 +1244,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 7:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							int out = swprintf_s( buf, MAX_PATH, ( is_hc_lower == true ? L"%016llx" : L"%016llX" ), fi->header_checksum );
+							int out = swprintf_s( buf, MAX_PATH, ( is_hc_lower ? L"%016llx" : L"%016llX" ), fi->header_checksum );
 
 							if ( fi->v_header_checksum != fi->header_checksum )
 							{
-								swprintf_s( buf + out, MAX_PATH - out, ( is_hc_lower == true ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
+								swprintf_s( buf + out, MAX_PATH - out, ( is_hc_lower ? L" : %016llx" : L" : %016llX" ), fi->v_header_checksum );
 							}
 						}
 						break;
@@ -1256,7 +1256,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						case 8:
 						{
 							// Output the hex string in either lowercase or uppercase.
-							swprintf_s( buf, MAX_PATH, ( is_eh_lower == true ? L"%016llx" : L"%016llX" ), fi->entry_hash );
+							swprintf_s( buf, MAX_PATH, ( is_eh_lower ? L"%016llx" : L"%016llX" ), fi->entry_hash );
 						}
 						break;
 
@@ -1360,7 +1360,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					SetBkMode( hdcMem, TRANSPARENT );
 
 					// Draw selected text
-					if ( selected == true )
+					if ( selected )
 					{
 						// Fill the background.
 						HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HIGHLIGHT ) );
@@ -1428,7 +1428,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			ShowWindow( g_hWnd_scan, SW_HIDE );
 
 			// If we're in a secondary thread, then kill it (cleanly) and wait for it to exit.
-			if ( in_thread == true )
+			if ( in_thread )
 			{
 				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &cleanup, ( void * )NULL, 0, NULL ) );
 			}
@@ -1528,44 +1528,36 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 			pi->output_path = NULL;
 			cmd_line = 0;
 
+			wchar_t fpath[ MAX_PATH ];
 			int file_offset = 0;	// Keeps track of the last file in filepath.
 
 			// Go through the list of paths.
 			for ( int i = 0; i < count; i++ )
 			{
-				// Get the length of the file path.
-				int file_path_length = DragQueryFile( ( HDROP )wParam, i, NULL, 0 );
-
-				// Get the file path.
-				wchar_t *fpath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( file_path_length + 1 ) );
-				DragQueryFile( ( HDROP )wParam, i, fpath, file_path_length + 1 );
+				// Get the file path and its length
+				int file_path_length = DragQueryFile( ( HDROP )wParam, i, fpath, MAX_PATH );
 
 				// Skip any folders that were dropped.
-				if ( ( GetFileAttributes( fpath ) & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
+				if ( ( GetFileAttributes( fpath ) & FILE_ATTRIBUTE_DIRECTORY ) == 0 )
 				{
-					free( fpath );
-					continue;
+					// Copy the root directory into filepath.
+					if ( pi->filepath == NULL )
+					{
+						pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * count ) + 1 ) );
+						pi->offset = file_path_length;
+						// Find the last occurance of "\" in the string.
+						while ( pi->offset != 0 && fpath[ --pi->offset ] != L'\\' );
+
+						// Save the root directory name.
+						wcsncpy_s( pi->filepath, pi->offset + 1, fpath, pi->offset );
+
+						file_offset = ( ++pi->offset );
+					}
+
+					// Copy the file name. Each is separated by the NULL character.
+					wcscpy_s( pi->filepath + file_offset, file_path_length - pi->offset + 1, fpath + pi->offset );
+					file_offset += ( file_path_length - pi->offset + 1 );
 				}
-
-				// Copy the root directory into filepath.
-				if ( pi->filepath == NULL )
-				{
-					pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * count ) + 1 ) );
-					pi->offset = file_path_length;
-					// Find the last occurance of "\" in the string.
-					while ( pi->offset != 0 && fpath[ --pi->offset ] != L'\\' );
-
-					// Save the root directory name.
-					wcsncpy_s( pi->filepath, pi->offset + 1, fpath, pi->offset );
-
-					file_offset = ( ++pi->offset );
-				}
-
-				// Copy the file name. Each is separated by the NULL character.
-				wcscpy_s( pi->filepath + file_offset, file_path_length - pi->offset + 1, fpath + pi->offset );
-				file_offset += ( file_path_length - pi->offset + 1 );
-
-				free( fpath );
 			}
 
 			DragFinish( ( HDROP )wParam );

@@ -86,7 +86,7 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 	// Retrieve the column information once so we don't have to call this for duplicate entries in the loop below.
 	bool got_columns = false;
 	extended_info *ei = NULL;
-	if ( g_retrieve_extended_information == true )
+	if ( g_retrieve_extended_information )
 	{
 		if ( ll != NULL && ll->fi != NULL )
 		{
@@ -116,7 +116,7 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 			free( ll->fi->filename );
 			ll->fi->filename = _wcsdup( filepath );
 
-			if ( got_columns == true )
+			if ( got_columns )
 			{
 				// Convert the record values to strings so we can print them out.
 				convert_values( &( ll->fi->ei ) );
@@ -160,7 +160,7 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 	++file_count; 
 
 	// Update our scan window with new scan information.
-	if ( g_show_details == true )
+	if ( g_show_details )
 	{
 		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
 		char buf[ 17 ] = { 0 };
@@ -202,7 +202,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 		hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
 
 		// Windows Vista doesn't hash the file extension or modified DOS time.
-		if ( is_win_7_or_higher == true )
+		if ( is_win_7_or_higher )
 		{
 			// Hash Wide Character File Extension
 			hash = hash_data( ( char * )extension, hash, wcslen( extension ) * sizeof( wchar_t ) );
@@ -217,7 +217,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 			hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
 
 			// Windows 8.1 calculates the precision loss between the converted write time and original write time.
-			if ( is_win_8_1_or_higher == true )
+			if ( is_win_8_1_or_higher )
 			{
 				// Convert the DOS time back into a FILETIME.
 				FILETIME converted_write_time;
@@ -241,7 +241,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 void traverse_directory( wchar_t *path )
 {
 	// We don't want to continue scanning if the user cancels the scan.
-	if ( g_kill_scan == true )
+	if ( g_kill_scan )
 	{
 		return;
 	}
@@ -256,7 +256,7 @@ void traverse_directory( wchar_t *path )
 	{
 		do
 		{
-			if ( g_kill_scan == true )
+			if ( g_kill_scan )
 			{
 				break;	// We need to close the find file handle.
 			}
@@ -273,7 +273,7 @@ void traverse_directory( wchar_t *path )
 						traverse_directory( filepath );
 
 						// Only hash folders if enabled.
-						if ( g_include_folders == true )
+						if ( g_include_folders )
 						{
 							hash_file( filepath, L"" );
 						}
@@ -401,13 +401,13 @@ void traverse_ese_database()
 	if ( g_revision < 0x14 && mssrch_state == MSSRCH_STATE_SHUTDOWN && msscb_state == MSSRCH_STATE_SHUTDOWN )
 	{
 		// We only need one to load successfully.
-		if ( InitializeMsSrch() == false && InitializeMsSCB() == false )
+		if ( !InitializeMsSrch() && !InitializeMsSCB() )
 		{
 			SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The modules mssrch.dll and msscb.dll failed to load.\r\n\r\nCompressed data will not be read." );
 		}
 	}
 
-	if ( g_retrieve_extended_information == true )
+	if ( g_retrieve_extended_information )
 	{
 		// Initialize g_rc_array to hold all of the record information we'll retrieve.
 		build_retrieve_column_array();
@@ -416,7 +416,7 @@ void traverse_ese_database()
 	while ( true )
 	{
 		// We don't want to continue scanning if the user cancels the scan.
-		if ( g_kill_scan == true )
+		if ( g_kill_scan )
 		{
 			break;
 		}
@@ -428,7 +428,7 @@ void traverse_ese_database()
 		}
 
 		// For XP and 7
-		if ( g_use_big_endian == true )
+		if ( g_use_big_endian )
 		{
 			file_attributes = ntohl( file_attributes );
 		}
@@ -436,7 +436,7 @@ void traverse_ese_database()
 		// See if the entry is a folder.
 		if ( ( file_attributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
 		{
-			if ( g_include_folders == false )
+			if ( !g_include_folders )
 			{
 				if ( JetMove( g_sesid, g_tableid_0A, JET_MoveNext, JET_bitNil ) != JET_errSuccess )
 				{
@@ -453,7 +453,7 @@ void traverse_ese_database()
 			file_extension[ rc[ 2 ].cbActual + 1 ] = 0;
 
 			wchar_t *uc_file_extension = NULL;
-			if ( g_file_extension->JetCompress == true )
+			if ( g_file_extension->JetCompress )
 			{
 				uc_file_extension = uncompress_value( file_extension, rc[ 2 ].cbActual );
 			}
@@ -494,7 +494,7 @@ void traverse_ese_database()
 		}
 
 		// Swap the byte order of the hash. For XP and 7
-		if ( g_use_big_endian == true )
+		if ( g_use_big_endian )
 		{
 			thumbnail_cache_id = ntohll( thumbnail_cache_id );
 		}
@@ -504,7 +504,7 @@ void traverse_ese_database()
 		item_path_display[ rc[ 1 ].cbActual + 1 ] = 0;
 
 		wchar_t *uc_item_path_display = NULL;
-		if ( g_item_path_display->JetCompress == true )
+		if ( g_item_path_display->JetCompress )
 		{
 			uc_item_path_display = uncompress_value( item_path_display, rc[ 1 ].cbActual );
 		}
@@ -588,7 +588,7 @@ unsigned __stdcall map_entries( void *pArguments )
 	InvalidateRect( g_hWnd_list, NULL, TRUE );
 
 	// Update the details.
-	if ( g_show_details == false )
+	if ( !g_show_details )
 	{
 		char msg[ 11 ] = { 0 };
 		sprintf_s( msg, 11, "%lu", file_count );

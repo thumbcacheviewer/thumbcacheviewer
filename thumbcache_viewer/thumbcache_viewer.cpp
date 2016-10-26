@@ -49,6 +49,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	ULONG_PTR gdiplusToken;
 
 	unsigned char fail_type = 0;
+	MSG msg = { NULL };
 
 	// Initialize GDI+.
 	Gdiplus::GdiplusStartup( &gdiplusToken, &gdiplusStartupInput, NULL );
@@ -305,7 +306,6 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	}
 
 	// Main message loop:
-	MSG msg;
 	while ( GetMessage( &msg, NULL, 0, 0 ) > 0 )
 	{
 		if ( g_hWnd_active == NULL || !IsDialogMessage( g_hWnd_active, &msg ) )	// Checks tab stops.

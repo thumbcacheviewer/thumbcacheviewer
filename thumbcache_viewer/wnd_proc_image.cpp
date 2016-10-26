@@ -307,7 +307,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			mouse_l_down = true;
 
 			// See if the right mouse button is down.
-			if ( mouse_r_down == true )
+			if ( mouse_r_down )
 			{
 				// Zoom in.
 				scale += 0.5f;
@@ -350,7 +350,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			mouse_r_down = true;
 
 			// See if the left mouse button is down.
-			if ( mouse_l_down == true )
+			if ( mouse_l_down )
 			{
 				// Zoom out.
 				scale -= 0.5f;
@@ -444,10 +444,10 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				}
 
 				// If the image has just been zoomed, display some text about it.
-				if ( zoom == true )
+				if ( zoom )
 				{
 					// Prevents InvalidateRect calls from interfering with an active timer.
-					if ( timer_active == false )
+					if ( !timer_active )
 					{
 						timer_active = true;
 						SetTimer( hWnd, IDT_TIMER, 5000, ( TIMERPROC )TimerProc );
@@ -518,7 +518,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			if ( wParam == SIZE_RESTORED )
 			{
 				// This will handle the case when the user moves the main window while the image window is minimized.
-				if ( is_attached == true )
+				if ( is_attached )
 				{
 					RECT rc;
 					GetWindowRect( hWnd, &rc );
@@ -593,7 +593,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			}
 
 			// Allow our image window to attach to the edge of the desktop, but only if it's not already attached to the main window.
-			if ( is_attached == false )
+			if ( !is_attached )
 			{
 				// The image window is no longer attached, so the main window can test if it attaches to this window.
 				skip_main = false;

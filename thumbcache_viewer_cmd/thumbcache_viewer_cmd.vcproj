@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="9.00"
 	Name="thumbcache_viewer_cmd"
-	ProjectGUID="{80016779-896E-4175-ACFE-80120250C0A9}"
+	ProjectGUID="{94A86E9B-F6BC-479E-8098-B36A5A5E9097}"
 	RootNamespace="thumbcache_viewer_cmd"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
@@ -133,7 +133,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkIncremental="1"
-				GenerateDebugInformation="true"
+				GenerateDebugInformation="false"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"

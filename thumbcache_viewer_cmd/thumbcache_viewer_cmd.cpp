@@ -196,7 +196,7 @@ int wmain( int argc, wchar_t *argv[] )
 			output_html = output_csv = true;
 		}
 
-		if ( output_html == true || output_csv == true )
+		if ( output_html || output_csv )
 		{
 			printf( "Do you want to skip reporting 0 byte files? (Y/N) " );
 			while ( getwchar() != L'\n' );	// Clear the input buffer.
@@ -620,7 +620,7 @@ int wmain( int argc, wchar_t *argv[] )
 		GetCurrentDirectory( MAX_PATH, output_path );	// Get the full path
 
 		// Convert our wide character strings to UTF-8 if we're going to output a report.
-		if ( output_html == true || output_csv == true )
+		if ( output_html || output_csv )
 		{
 			utf8_path_length = WideCharToMultiByte( CP_UTF8, 0, output_path, -1, NULL, 0, NULL, NULL );
 			utf8_path = ( char * )malloc( sizeof( char ) * utf8_path_length );
@@ -632,7 +632,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 
 		// Create the HTML report file.
-		if ( output_html == true )
+		if ( output_html )
 		{
 			hFile_html = CreateFileA( "Report.html", GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 			if ( hFile_html == INVALID_HANDLE_VALUE )
@@ -684,7 +684,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 
 		// Create the CSV report file.
-		if ( output_csv == true )
+		if ( output_csv )
 		{
 			hFile_csv = CreateFileA( "Report.csv", GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 			if ( hFile_csv == INVALID_HANDLE_VALUE )
@@ -782,7 +782,7 @@ int wmain( int argc, wchar_t *argv[] )
 					current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 					// If we found the beginning of the entry, attempt to read it again.
-					if ( scan_memory( hFile, current_position ) == true )
+					if ( scan_memory( hFile, current_position ) )
 					{
 						printf( "A valid entry has been found.\n" );
 						printf( "---------------------------------------------\n" );
@@ -818,7 +818,7 @@ int wmain( int argc, wchar_t *argv[] )
 					current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 					// If we found the beginning of the entry, attempt to read it again.
-					if ( scan_memory( hFile, current_position ) == true )
+					if ( scan_memory( hFile, current_position ) )
 					{
 						printf( "A valid entry has been found.\n" );
 						printf( "---------------------------------------------\n" );
@@ -854,7 +854,7 @@ int wmain( int argc, wchar_t *argv[] )
 					current_position = SetFilePointer( hFile, current_position, NULL, FILE_BEGIN );
 
 					// If we found the beginning of the entry, attempt to read it again.
-					if ( scan_memory( hFile, current_position ) == true )
+					if ( scan_memory( hFile, current_position ) )
 					{
 						printf( "A valid entry has been found.\n" );
 						printf( "---------------------------------------------\n" );
@@ -1032,7 +1032,7 @@ int wmain( int argc, wchar_t *argv[] )
 			int utf8_filename_length = 0;
 
 			// Write the entry to a new line in the CSV report file.
-			if ( output_csv == true && ( skip_blank == false || ( skip_blank == true && data_size > 0 ) ) )
+			if ( output_csv && ( !skip_blank || ( skip_blank && data_size > 0 ) ) )
 			{
 				char buf[ 125 ];
 				int write_size = 0;
@@ -1057,14 +1057,14 @@ int wmain( int argc, wchar_t *argv[] )
 				free( out_buf );
 
 				// Save the filename if we're going to output an html file. Cuts down on the number of conversions.
-				if ( output_html == false )
+				if ( !output_html )
 				{
 					free( utf8_filename );
 				}
 			}
 
 			// Write the entry to a new table row in the HTML report file.
-			if ( output_html == true && ( skip_blank == false || ( skip_blank == true && data_size > 0 ) ) )
+			if ( output_html && ( !skip_blank || ( skip_blank && data_size > 0 ) ) )
 			{
 				char buf[ 196 ];
 				int write_size = 0;
@@ -1087,7 +1087,7 @@ int wmain( int argc, wchar_t *argv[] )
 				WriteFile( hFile_html, utf8_filename, utf8_filename_length - 1, &written, NULL );
 
 				// If there's an image we want to extract, then insert it into the last column.
-				if ( data_size != 0 && extract_thumbnails == true )
+				if ( data_size != 0 && extract_thumbnails )
 				{
 					// Replace any invalid filename characters with an underscore "_".
 					char *filename_ptr = utf8_filename;
@@ -1126,7 +1126,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 			// Output the data with the given (UTF-16) filename.
 			printf( "---------------------------------------------\n" );
-			if ( data_size != 0 && extract_thumbnails == true )
+			if ( data_size != 0 && extract_thumbnails )
 			{
 				// Replace any invalid filename characters with an underscore "_".
 				wchar_t *filename_ptr = filename;
@@ -1162,7 +1162,7 @@ int wmain( int argc, wchar_t *argv[] )
 					printf( "Writing failed.\n" );
 				}
 			}
-			else if ( extract_thumbnails == false )
+			else if ( !extract_thumbnails )
 			{
 				printf( "Writing skipped.\n" );
 			}
@@ -1183,14 +1183,14 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 
 		// Close our HTML report.
-		if ( output_html == true )
+		if ( output_html )
 		{
 			WriteFile( hFile_html, "</table><br /></body></html>", 28, &written, NULL );
 			CloseHandle( hFile_html );
 		}
 
 		// Close our CSV report.
-		if ( output_csv == true )
+		if ( output_csv )
 		{
 			WriteFile( hFile_csv, "\r\n", 2, &written, NULL );
 			CloseHandle( hFile_csv );

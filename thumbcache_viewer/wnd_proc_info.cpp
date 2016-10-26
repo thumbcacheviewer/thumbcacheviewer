@@ -174,7 +174,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					NMLISTVIEW *nmlv = ( NMLISTVIEW * )lParam;
 
 					// Make sure the control key is down and that we're not already in a worker thread. Prevents threads from queuing in case the user falls asleep on their keyboard.
-					if ( GetKeyState( VK_CONTROL ) & 0x8000 && in_thread == false )
+					if ( GetKeyState( VK_CONTROL ) & 0x8000 && !in_thread )
 					{
 						// Determine which key was pressed.
 						switch ( ( ( LPNMLVKEYDOWN )lParam )->wVKey )
@@ -467,7 +467,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					SetBkMode( hdcMem, TRANSPARENT );
 
 					// Draw selected text
-					if ( selected == true )
+					if ( selected )
 					{
 						// Fill the background.
 						HBRUSH color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_HIGHLIGHT ) );
@@ -530,7 +530,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// 0 = inactive, > 0 = active
 			g_hWnd_active = ( wParam == 0 ? NULL : hWnd );
 
-            return FALSE;
+			return FALSE;
 		}
 		break;
 
@@ -543,6 +543,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, 0 );
 			SendMessage( g_hWnd_list_info, LVM_DELETEALLITEMS, 0, 0 );
+
+			return 0;
 		}
 		break;
 
