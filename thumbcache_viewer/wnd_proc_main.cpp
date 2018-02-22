@@ -200,8 +200,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			DragAcceptFiles( g_hWnd_list, TRUE );
 
 			// Subclass our listview to receive WM_DROPFILES.
-			ListViewProc = ( WNDPROC )GetWindowLong( g_hWnd_list, GWL_WNDPROC );
-			SetWindowLong( g_hWnd_list, GWL_WNDPROC, ( LONG )ListViewSubProc );
+			ListViewProc = *( WNDPROC ) GetWindowLongPtr( g_hWnd_list, GWLP_WNDPROC );
+			SetWindowLongPtr( g_hWnd_list, GWLP_WNDPROC, ( LONG_PTR )&ListViewSubProc );
 
 			// Initialize our listview columns
 			LVCOLUMNA lvc = { NULL }; 
@@ -1061,8 +1061,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					g_hWnd_edit = ( HWND )SendMessage( pdi->hdr.hwndFrom, LVM_GETEDITCONTROL, 0, 0 );
 
 					// Subclass our edit window to modify its position.
-					EditProc = ( WNDPROC )GetWindowLongPtr( g_hWnd_edit, GWL_WNDPROC );
-					SetWindowLongPtr( g_hWnd_edit, GWL_WNDPROC, ( LONG )EditSubProc );
+					EditProc = *( WNDPROC )GetWindowLongPtr( g_hWnd_edit, GWLP_WNDPROC );
+					SetWindowLongPtr( g_hWnd_edit, GWLP_WNDPROC, ( LONG_PTR )&EditSubProc );
 
 					// Set our edit control's text to the list item's text.
 					SetWindowText( g_hWnd_edit, current_fileinfo->filename );
