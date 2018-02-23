@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2016 Eric Kutcher
+	thumbcache_viewer will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2018 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "globals.h"
@@ -200,8 +200,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			DragAcceptFiles( g_hWnd_list, TRUE );
 
 			// Subclass our listview to receive WM_DROPFILES.
-			ListViewProc = ( WNDPROC )GetWindowLong( g_hWnd_list, GWL_WNDPROC );
-			SetWindowLong( g_hWnd_list, GWL_WNDPROC, ( LONG )ListViewSubProc );
+			ListViewProc = ( WNDPROC )GetWindowLongPtr( g_hWnd_list, GWLP_WNDPROC );
+			SetWindowLongPtr( g_hWnd_list, GWLP_WNDPROC, ( LONG_PTR )ListViewSubProc );
 
 			// Initialize our listview columns
 			LVCOLUMNA lvc = { NULL }; 
@@ -629,7 +629,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						LVITEM lvi = { NULL };
 						lvi.mask = LVIF_PARAM;
-						lvi.iItem = SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
+						lvi.iItem = ( int )SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
 
 						if ( lvi.iItem != -1 )
 						{
@@ -642,7 +642,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.4\r\n\r\nCopyright \xA9 2011-2016 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.5\r\n\r\nCopyright \xA9 2011-2018 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1051,24 +1051,24 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						return TRUE;
 					}
-					
+
 					// Get the bounding box of the Filename column we're editing.
 					current_edit_pos.top = 1;
 					current_edit_pos.left = LVIR_BOUNDS;
 					SendMessage( pdi->hdr.hwndFrom, LVM_GETSUBITEMRECT, pdi->item.iItem, ( LPARAM )&current_edit_pos );
-					
+
 					// Get the edit control that the listview creates.
 					g_hWnd_edit = ( HWND )SendMessage( pdi->hdr.hwndFrom, LVM_GETEDITCONTROL, 0, 0 );
 
 					// Subclass our edit window to modify its position.
-					EditProc = ( WNDPROC )GetWindowLongPtr( g_hWnd_edit, GWL_WNDPROC );
-					SetWindowLongPtr( g_hWnd_edit, GWL_WNDPROC, ( LONG )EditSubProc );
+					EditProc = ( WNDPROC )GetWindowLongPtr( g_hWnd_edit, GWLP_WNDPROC );
+					SetWindowLongPtr( g_hWnd_edit, GWLP_WNDPROC, ( LONG_PTR )EditSubProc );
 
 					// Set our edit control's text to the list item's text.
 					SetWindowText( g_hWnd_edit, current_fileinfo->filename );
 
 					// Get the length of the filename without the extension.
-					int ext_len = wcslen( current_fileinfo->filename );
+					int ext_len = ( int )wcslen( current_fileinfo->filename );
 					while ( ext_len != 0 && current_fileinfo->filename[ --ext_len ] != L'.' );
 
 					// Select all the text except the file extension (if ext_len = 0, then everything is selected)
@@ -1089,7 +1089,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						return FALSE;
 					}
 					// Prevent the edit if the text length is 0.
-					unsigned int length = wcslen( pdi->item.pszText );
+					unsigned int length = ( unsigned int )wcslen( pdi->item.pszText );
 					if ( length == 0 )
 					{
 						return FALSE;
@@ -1451,7 +1451,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_DESTROY:
 		{
 			// Get the number of items in the listview.
-			int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+			int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 
 			LVITEM lvi = { NULL };
 			lvi.mask = LVIF_PARAM;

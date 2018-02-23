@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2016 Eric Kutcher
+	thumbcache_viewer will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2018 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "menus.h"
@@ -267,8 +267,8 @@ void UpdateMenus( unsigned char action )
 	}
 	else
 	{
-		int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
-		int sel_count = SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
+		int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+		int sel_count = ( int )SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
 
 		long type = ( item_count > 0 ) ? MF_ENABLED : MF_DISABLED;
 		EnableMenuItem( g_hMenu, MENU_CHECKSUMS, type );

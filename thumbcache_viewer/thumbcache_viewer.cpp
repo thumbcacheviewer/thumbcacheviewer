@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2016 Eric Kutcher
+	thumbcache_viewer will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2018 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "globals.h"
@@ -223,7 +223,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				int filepath_offset = 0;
 				for ( int i = 1; i < argCount; ++i )
 				{
-					int filepath_length = wcslen( szArgList[ i ] );
+					int filepath_length = ( int )wcslen( szArgList[ i ] );
 
 					// See if it's an output parameter.
 					if ( filepath_length > 1 && szArgList[ i ][ 0 ] == L'-' && ( szArgList[ i ][ 1 ] == L'o' || szArgList[ i ][ 1 ] == L'O' ) )

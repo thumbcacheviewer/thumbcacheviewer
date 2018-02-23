@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2016 Eric Kutcher
+	thumbcache_viewer will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2018 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "globals.h"
@@ -131,7 +131,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					LVITEM lvi = { NULL };
 					lvi.mask = LVIF_PARAM;
-					lvi.iItem = SendMessage( g_hWnd_list_info, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
+					lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
 
 					if ( lvi.iItem != -1 )
 					{
@@ -265,7 +265,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					EnableMenuItem( g_hMenuSub_ei_context, MENU_COPY_SEL, type );
 					EnableMenuItem( g_hMenuSub_ei_context, MENU_PROP_VALUE, type );
 
-					int item_count = SendMessage( nmitem->hdr.hwndFrom, LVM_GETITEMCOUNT, 0, 0 );
+					int item_count = ( int )SendMessage( nmitem->hdr.hwndFrom, LVM_GETITEMCOUNT, 0, 0 );
 					EnableMenuItem( g_hMenuSub_ei_context, MENU_SELECT_ALL, ( item_count > 0 && SendMessage( nmitem->hdr.hwndFrom, LVM_GETSELECTEDCOUNT, 0, 0 ) < item_count ? MF_ENABLED : MF_DISABLED ) );
 
 					// Show our edit context menu as a popup.
@@ -585,7 +585,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					extended_info *t_ei = fi->ei;
 					while ( t_ei != NULL )
 					{
-						lvi.iItem = SendMessage( g_hWnd_list_info, LVM_GETITEMCOUNT, 0, 0 );
+						lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETITEMCOUNT, 0, 0 );
 						lvi.lParam = ( LPARAM )t_ei;
 						SendMessage( g_hWnd_list_info, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
 
@@ -601,7 +601,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				// Insert a row into our listview.
 				LVITEM lvi = { NULL };
 				lvi.mask = LVIF_PARAM;
-				lvi.iItem = SendMessage( g_hWnd_list_info, LVM_GETITEMCOUNT, 0, 0 );
+				lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETITEMCOUNT, 0, 0 );
 				lvi.iSubItem = 0;
 				lvi.lParam = lParam;
 				SendMessage( g_hWnd_list_info, LVM_INSERTITEM, 0, ( LPARAM )&lvi );

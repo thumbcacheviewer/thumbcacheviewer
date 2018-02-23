@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2016 Eric Kutcher
+	thumbcache_viewer will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2018 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "read_thumbcache.h"
@@ -78,7 +78,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 		int fname_length = 0;
 		wchar_t *fname = pi->filepath + pi->offset;
 
-		int filepath_length = wcslen( pi->filepath ) + 1;	// Include NULL character.
+		int filepath_length = ( int )wcslen( pi->filepath ) + 1;	// Include NULL character.
 		
 		bool construct_filepath = ( filepath_length > pi->offset && cmd_line == 0 ? false : true );
 
@@ -96,7 +96,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 			// Construct the filepath for each file.
 			if ( construct_filepath )
 			{
-				fname_length = wcslen( fname ) + 1;	// Include '\' character or NULL character
+				fname_length = ( int )wcslen( fname ) + 1;	// Include '\' character or NULL character
 
 				if ( cmd_line != 0 )
 				{
@@ -124,7 +124,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 			{
 				shared_info *si = NULL;
 				DWORD read = 0;
-				int item_count = SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
+				int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
 
 				database_header dh = { 0 };
 				ReadFile( hFile, &dh, sizeof( database_header ), &read, NULL );
@@ -314,7 +314,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					if ( dh.version == WINDOWS_VISTA )
 					{
 						// The Vista file extension can be up to 4 characters long and unterminated.
-						extra_extension = wcsnlen( ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
+						extra_extension = ( unsigned char )wcsnlen( ( ( database_cache_entry_vista * )database_cache_entry )->extension, 4 );
 
 						// Include '.'
 						if ( extra_extension > 0 )
