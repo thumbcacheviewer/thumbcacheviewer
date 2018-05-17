@@ -280,7 +280,17 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				if ( pi->filepath[ 0 ] != NULL )
 				{
 					// filepath will be freed in the thread.
-					CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL ) );
+					HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL );
+					if ( thread != NULL )
+					{
+						CloseHandle( thread );
+					}
+					else
+					{
+						free( pi->output_path );
+						free( pi->filepath );
+						free( pi );
+					}
 				}
 				else
 				{

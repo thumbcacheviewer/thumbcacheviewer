@@ -547,12 +547,29 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 				save_type->filepath = pi->output_path;
 
 				// save_type is freed in the save_items thread.
-				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
+				HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL );
+				if ( thread != NULL )
+				{
+					CloseHandle( thread );
+				}
+				else
+				{
+					free( save_type->filepath );
+					free( save_type );
+				}
 			}
 			else	// Save CSV.
 			{
 				// output_path is freed in save_csv.
-				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )pi->output_path, 0, NULL ) );
+				HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )pi->output_path, 0, NULL );
+				if ( thread != NULL )
+				{
+					CloseHandle( thread );
+				}
+				else
+				{
+					free( pi->output_path );
+				}
 			}
 		}
 

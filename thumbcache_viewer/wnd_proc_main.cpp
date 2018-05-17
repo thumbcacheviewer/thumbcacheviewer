@@ -486,7 +486,16 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							cmd_line = 0;
 
 							// pi will be freed in the thread.
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL ) );
+							HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL );
+							if ( thread != NULL )
+							{
+								CloseHandle( thread );
+							}
+							else
+							{
+								free( pi->filepath );
+								free( pi );
+							}
 						}
 						else
 						{
@@ -529,7 +538,16 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							save_type->save_all = ( LOWORD( wParam ) == MENU_SAVE_ALL ? true : false );
 							save_type->filepath = save_directory;
 
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL ) );
+							HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &save_items, ( void * )save_type, 0, NULL );
+							if ( thread != NULL )
+							{
+								CloseHandle( thread );
+							}
+							else
+							{
+								free( save_type->filepath );
+								free( save_type );
+							}
 						}
 
 						OleUninitialize();
@@ -554,7 +572,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						if ( GetSaveFileName( &ofn ) )
 						{
 							// file_path is freed in the save_csv thread.
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )file_path, 0, NULL ) );
+							HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &save_csv, ( void * )file_path, 0, NULL );
+							if ( thread != NULL )
+							{
+								CloseHandle( thread );
+							}
+							else
+							{
+								free( file_path );
+							}
 						}
 						else
 						{
@@ -642,7 +668,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.5\r\n\r\nCopyright \xA9 2011-2018 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.6\r\n\r\nCopyright \xA9 2011-2018 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -1568,7 +1594,16 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 				wmemset( pi->filepath + file_offset, L'\0', 1 );
 
 				// filepath will be freed in the thread.
-				CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL ) );
+				HANDLE thread = ( HANDLE )_beginthreadex( NULL, 0, &read_thumbcache, ( void * )pi, 0, NULL );
+				if ( thread != NULL )
+				{
+					CloseHandle( thread );
+				}
+				else
+				{
+					free( pi->filepath );
+					free( pi );
+				}
 			}
 			else	// No files were dropped.
 			{
