@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -81,13 +81,13 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 			g_hWnd_hashing[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 			g_hWnd_hashing[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 
-			g_hWnd_static4 = CreateWindowA( WC_STATICA, "Current file/folder hash:", WS_CHILD, 0, 135, rc.right - 270, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_hash[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, rc.right - 270, 135, rc.right - 155, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_hash[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, rc.right - 270, 135, rc.right - 155, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static4 = CreateWindowA( WC_STATICA, "Current file/folder hash:", WS_CHILD, 0, 135, 200, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_hash[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 135, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_hash[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 135, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
 
-			g_hWnd_static5 = CreateWindowA( WC_STATICA, "Total files and/or folders:", WS_CHILD, 0, 155, rc.right - 270, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_count[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, rc.right - 270, 155, rc.right - 155, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_count[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, rc.right - 270, 155, rc.right - 155, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static5 = CreateWindowA( WC_STATICA, "Total files and/or folders:", WS_CHILD, 0, 160, 200, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_count[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 160, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_count[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 160, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
 
 			// Make pretty font.
 			SendMessage( g_hWnd_static1, WM_SETFONT, ( WPARAM )hFont, 0 );
@@ -162,7 +162,7 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 						ofn.hwndOwner = hWnd;
 
 						// Display the Open File dialog box
-						if( GetOpenFileName( &ofn ) )
+						if ( GetOpenFileName( &ofn ) )
 						{
 							SendMessage( g_hWnd_path[ 1 ], WM_SETTEXT, 0, ( LPARAM )scan_directory );
 						}
@@ -192,16 +192,16 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			// Allow our controls to move in relation to the parent window.
 			HDWP hdwp = BeginDeferWindowPos( 10 );
-			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 0, 15, rc.right - 35, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 0, 15, rc.right - 35, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - 30, 15, 30, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 0, 60, rc.right - 285, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 0, 60, rc.right - 105, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 280, 60, 100, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - 100, 60, 100, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 180, 60, 180, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 0, 105, rc.right, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 0, 105, rc.right, 20, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 0, 15, rc.right - 35, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 0, 15, rc.right - 35, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - 30, 15, 30, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 0, 60, rc.right - 295, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 0, 60, rc.right - 105, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 290, 62, 100, 20, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - 100, 62, 100, 20, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 180, 62, 180, 20, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 0, 105, rc.right, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 0, 105, rc.right, 23, SWP_NOZORDER );
 			EndDeferWindowPos( hdwp );
 
 			return 0;
@@ -214,7 +214,6 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 		}
 		break;
 	}
-	return TRUE;
 }
 
 LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -274,6 +273,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				SetCursor( LoadCursor( NULL, IDC_ARROW ) );	// Default arrow.
 				wait_cursor = NULL;
 			}
+
+			return 0;
 		}
 		break;
 
@@ -385,7 +386,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// Adjust the window height.
 					RECT rc;
 					GetWindowRect( hWnd, &rc );
-					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, MIN_HEIGHT - ( g_show_details ? 25 : 115 ), SWP_NOMOVE );
+					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, 320 - ( g_show_details ? 5 : 100 ), SWP_NOMOVE );
 				}
 				break;
 			}
@@ -451,7 +452,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						// If we're scanning, then enable the scan button. Otherwise, check for a valid path.
 						EnableWindow( g_hWnd_btn_scan, ( !g_kill_scan || SendMessage( g_hWnd_path[ index ], WM_GETTEXTLENGTH, 0, 0 ) >= 3 ) ? TRUE : FALSE );
 
-						tab_index = index;
+						tab_index = ( unsigned char )index;
 					}
 
 					return FALSE;
@@ -490,8 +491,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		{
 			// Set the minimum dimensions that the window can be sized to.
 			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT - ( g_show_details ? 25 : 115 );
-			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = MIN_HEIGHT - ( g_show_details ? 25 : 115 );
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = 320 - ( g_show_details ? 5 : 100 );
+			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = 320 - ( g_show_details ? 5 : 100 );
 
 			return 0;
 		}
@@ -523,6 +524,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_ALERT:
 		{
 			MessageBoxA( hWnd, ( LPCSTR )lParam, PROGRAM_CAPTION_A, MB_APPLMODAL | ( wParam == 1 ? MB_ICONINFORMATION : MB_ICONWARNING ) | MB_SETFOREGROUND );
+
+			return 0;
 		}
 		break;
 
@@ -604,6 +607,8 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				SetWindowPos( hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE );
 				ShowWindow( hWnd, SW_SHOW );
 			}
+
+			return 0;
 		}
 		break;
 
@@ -613,5 +618,4 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		}
 		break;
 	}
-	return TRUE;
 }

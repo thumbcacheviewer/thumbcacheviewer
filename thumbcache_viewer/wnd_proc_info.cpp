@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -85,8 +85,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			RECT rc;
 			GetClientRect( hWnd, &rc );
 
-			HWND g_hWnd_static1 = CreateWindowA( WC_STATICA, "Mapped Hash:", WS_CHILD | WS_VISIBLE, 20, 20, rc.right - 310, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_mapped_hash = CreateWindow( WC_STATIC, NULL, WS_CHILD | WS_VISIBLE, rc.right - 290, 20, rc.right - 195, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_mapped_hash = CreateWindowA( WC_STATICA, "Mapped Hash:", WS_CHILD | WS_VISIBLE, 20, 20, rc.right - 40, 15, hWnd, NULL, NULL, NULL );
 
 			g_hWnd_list_info = CreateWindowEx( WS_EX_CLIENTEDGE, WC_LISTVIEW, NULL, LVS_REPORT | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 20, 40, rc.right - 40, rc.bottom - 90, hWnd, NULL, NULL, NULL );
 			SendMessage( g_hWnd_list_info, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES );
@@ -101,13 +100,12 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = "Property Value";
-			lvc.cx = 200;
+			lvc.cx = 350;
 			SendMessageA( g_hWnd_list_info, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
 			g_hWnd_btn_close = CreateWindowA( WC_BUTTONA, "Close", BS_DEFPUSHBUTTON | WS_CHILD | WS_TABSTOP | WS_VISIBLE, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, hWnd, ( HMENU )BTN_OK, NULL, NULL );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_static1, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_static_mapped_hash, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_list_info, WM_SETFONT, ( WPARAM )hFont, 0 );
 			SendMessage( g_hWnd_btn_close, WM_SETFONT, ( WPARAM )hFont, 0 );
@@ -131,7 +129,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					LVITEM lvi = { NULL };
 					lvi.mask = LVIF_PARAM;
-					lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
+					lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETNEXTITEM, ( WPARAM )-1, LVNI_FOCUSED | LVNI_SELECTED );
 
 					if ( lvi.iItem != -1 )
 					{
@@ -155,7 +153,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.mask = LVIF_STATE;
 					lvi.state = LVIS_SELECTED;
 					lvi.stateMask = LVIS_SELECTED;
-					SendMessage( g_hWnd_list_info, LVM_SETITEMSTATE, -1, ( LPARAM )&lvi );
+					SendMessage( g_hWnd_list_info, LVM_SETITEMSTATE, ( WPARAM )-1, ( LPARAM )&lvi );
 				}
 				break;
 			}
@@ -293,7 +291,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_MEASUREITEM:
 		{
 			// Set the row height of the list view.
-			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType = ODT_LISTVIEW )
+			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType == ODT_LISTVIEW )
 			{
 				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height;
 			}
@@ -541,7 +539,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			g_current_fi = NULL;	// Reset.
 
-			SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, 0 );
+			SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, ( LPARAM )"Mapped Hash:" );
 			SendMessage( g_hWnd_list_info, LVM_DELETEALLITEMS, 0, 0 );
 
 			return 0;
@@ -551,6 +549,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_ALERT:
 		{
 			MessageBoxA( hWnd, ( LPCSTR )lParam, PROGRAM_CAPTION_A, MB_APPLMODAL | ( wParam == 1 ? MB_ICONINFORMATION : MB_ICONWARNING ) | MB_SETFOREGROUND );
+
+			return 0;
 		}
 		break;
 
@@ -559,7 +559,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			if ( wParam == 0 )
 			{
 				SendMessage( g_hWnd_list_info, LVM_DELETEALLITEMS, 0, 0 );
-				SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, 0 );
+				SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, ( LPARAM )"Mapped Hash:" );
 
 				// Remove the column formatting.
 				LVCOLUMN lvc = { NULL };
@@ -573,8 +573,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					g_current_fi = fi;
 
-					char chash[ 17 ] = { 0 };
-					sprintf_s( chash, 17, "%016llx", fi->mapped_hash );
+					char chash[ 32 ] = { 0 };
+					sprintf_s( chash, 32, "Mapped Hash:\t%016llx", fi->mapped_hash );
 					SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, ( LPARAM )chash );
 
 					// Insert a row into our listview.
@@ -606,6 +606,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				lvi.lParam = lParam;
 				SendMessage( g_hWnd_list_info, LVM_INSERTITEM, 0, ( LPARAM )&lvi );
 			}
+
+			return 0;
 		}
 		break;
 
@@ -615,5 +617,4 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		}
 		break;
 	}
-	return TRUE;
 }

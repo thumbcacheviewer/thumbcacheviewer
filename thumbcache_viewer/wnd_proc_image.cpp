@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -325,14 +325,13 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 				// Redraw our image.
 				InvalidateRect( hWnd, NULL, TRUE );
-
-				// Don't save our current position.
-				break;
 			}
-
-			// Save our initial mouse down position.
-			old_pos.x = LOWORD( lParam );
-			old_pos.y = HIWORD( lParam );
+			else
+			{
+				// Save our initial mouse down position.
+				old_pos.x = LOWORD( lParam );
+				old_pos.y = HIWORD( lParam );
+			}
 
 			return 0;
 		}
@@ -475,15 +474,15 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		break;
 
-		case WM_GETMINMAXINFO:
+		/*case WM_GETMINMAXINFO:
 		{
 			// Set the minimum dimensions that the window can be sized to.
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_HEIGHT;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT;
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_HEIGHT / 2;
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT / 2;
 
 			return 0;
 		}
-		break;
+		break;*/
 
 		case WM_SYSCOMMAND:
 		{
@@ -523,12 +522,10 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 					RECT rc;
 					GetWindowRect( hWnd, &rc );
 					// Call the WM_MOVING callback with the current position of our window. Set wParam to -1 to tell WM_MOVING that we don't want to calculate the cursor position.
-					SendMessage( hWnd, WM_MOVING, -1, ( LPARAM )&rc );
+					SendMessage( hWnd, WM_MOVING, ( WPARAM )-1, ( LPARAM )&rc );
 				}
-				break;
 			}
-
-			if ( wParam == SIZE_MAXIMIZED )
+			else if ( wParam == SIZE_MAXIMIZED )
 			{
 				// We're no longer attached to the main window if we're maximized.
 				is_attached = false;
@@ -554,40 +551,41 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			GetWindowRect( g_hWnd_main, &wa );
 
 			is_attached = false;
-			if( is_close( rc->right, wa.left ) )		// Attach to left side of main window.
+
+			if ( is_close( rc->right - g_border_width, wa.left + g_border_width ) )			// Attach to left side of main window.
 			{
 				// Allow it to snap only to the dimensions of the main window.
 				if ( ( rc->bottom > wa.top ) && ( rc->top < wa.bottom ) )
 				{
-					OffsetRect( rc, wa.left - rc->right, 0 );
+					OffsetRect( rc, wa.left - rc->right + ( g_border_width * 2 ), 0 );
 					is_attached = true;
 				}
 			}
-			else if ( is_close( wa.right, rc->left ) )	// Attach to right side of main window.
+			else if ( is_close( wa.right - g_border_width, rc->left + g_border_width ) )	// Attach to right side of main window.
 			{
 				// Allow it to snap only to the dimensions of the main window.
 				if ( ( rc->bottom > wa.top ) && ( rc->top < wa.bottom ) )
 				{
-					OffsetRect( rc, wa.right - rc->left, 0 );
+					OffsetRect( rc, wa.right - rc->left - ( g_border_width * 2 ), 0 );
 					is_attached = true;
 				}
 			}
 
-			if( is_close( rc->bottom, wa.top ) )		// Attach to top of main window.
+			if ( is_close( rc->bottom - g_border_width, wa.top ) )			// Attach to top of main window.
 			{
 				// Allow it to snap only to the dimensions of the main window.
 				if ( ( rc->left < wa.right ) && ( rc->right > wa.left ) )
 				{
-					OffsetRect( rc, 0, wa.top - rc->bottom );
+					OffsetRect( rc, 0, wa.top - rc->bottom + g_border_width );
 					is_attached = true;
 				}
 			}
-			else if ( is_close( wa.bottom, rc->top ) )	// Attach to bottom of main window.
+			else if ( is_close( wa.bottom - g_border_width, rc->top ) )		// Attach to bottom of main window.
 			{
 				// Allow it to snap only to the dimensions of the main window.
 				if ( ( rc->left < wa.right ) && ( rc->right > wa.left ) )
 				{
-					OffsetRect( rc, 0, wa.bottom - rc->top );
+					OffsetRect( rc, 0, wa.bottom - rc->top - g_border_width );
 					is_attached = true;
 				}
 			}
@@ -598,24 +596,27 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				// The image window is no longer attached, so the main window can test if it attaches to this window.
 				skip_main = false;
 
-				SystemParametersInfo( SPI_GETWORKAREA, 0, &wa, 0 );
+				HMONITOR hMon = MonitorFromWindow( hWnd, MONITOR_DEFAULTTONEAREST );
+				MONITORINFO mi;
+				mi.cbSize = sizeof( MONITORINFO );
+				GetMonitorInfo( hMon, &mi );
 
-				if( is_close( rc->left, wa.left ) )			// Attach to left side of the desktop.
+				if ( is_close( rc->left + g_border_width, mi.rcWork.left ) )				// Attach to left side of the desktop.
 				{
-					OffsetRect( rc, wa.left - rc->left, 0 );
+					OffsetRect( rc, mi.rcWork.left - rc->left - g_border_width, 0 );
 				}
-				else if ( is_close( wa.right, rc->right ) )	// Attach to right side of the desktop.
+				else if ( is_close( mi.rcWork.right, rc->right - g_border_width ) )			// Attach to right side of the desktop.
 				{
-					OffsetRect( rc, wa.right - rc->right, 0 );
+					OffsetRect( rc, mi.rcWork.right - rc->right + g_border_width, 0 );
 				}
 
-				if( is_close( rc->top, wa.top ) )				// Attach to top of the desktop.
+				if ( is_close( rc->top, mi.rcWork.top ) )									// Attach to top of the desktop.
 				{
-					OffsetRect( rc, 0, wa.top - rc->top );
+					OffsetRect( rc, 0, mi.rcWork.top - rc->top );
 				}
-				else if ( is_close( wa.bottom, rc->bottom ) )	// Attach to bottom of the desktop.
+				else if ( is_close( mi.rcWork.bottom, rc->bottom - g_border_width ) )		// Attach to bottom of the desktop.
 				{
-					OffsetRect( rc, 0, wa.bottom - rc->bottom );
+					OffsetRect( rc, 0, mi.rcWork.bottom - rc->bottom + g_border_width );
 				}
 			}
 			return TRUE;
@@ -640,10 +641,9 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		break;
 	}
-	return TRUE;
 }
 
-VOID CALLBACK TimerProc( HWND hWnd, UINT msg, UINT idTimer, DWORD dwTime )
+VOID CALLBACK TimerProc( HWND hWnd, UINT /*msg*/, UINT /*idTimer*/, DWORD /*dwTime*/ )
 { 
 	zoom = false;
 

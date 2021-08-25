@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ bool scan_memory( HANDLE hFile, unsigned int &offset )
 	char *scan = NULL;
 	DWORD read = 0;
 
-	while ( true )
+	for ( ;; )
 	{
 		// Begin reading through the database.
 		ReadFile( hFile, buf, sizeof( char ) * 32768, &read, NULL );
@@ -148,7 +148,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 				unsigned int header_offset = 0;
 
 				// Go through our database and attempt to extract each cache entry.
-				while ( true )
+				for ( ;; )
 				{
 					// Stop processing and exit the thread.
 					if ( g_kill_thread )

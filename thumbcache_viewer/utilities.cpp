@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -35,12 +35,6 @@ bool skip_draw = false;				// Prevents WM_DRAWITEM from accessing listview items
 linked_list *g_be = NULL;			// A list to hold all of the blank entries.
 
 dllrbt_tree *fileinfo_tree = NULL;	// Red-black tree of fileinfo structures.
-
-bool is_close( int a, int b )
-{
-	// See if the distance between two points is less than the snap width.
-	return abs( a - b ) < SNAP_WIDTH;
-}
 
 void Processing_Window( bool enable )
 {
@@ -407,7 +401,7 @@ void create_fileinfo_tree()
 }
 
 // This will allow our main thread to continue while secondary threads finish their processing.
-unsigned __stdcall cleanup( void *pArguments )
+unsigned __stdcall cleanup( void * /*pArguments*/ )
 {
 	// This semaphore will be released when the thread gets killed.
 	shutdown_semaphore = CreateSemaphore( NULL, 0, 1, NULL );
@@ -753,7 +747,7 @@ CLEANUP:
 	return 0;
 }
 
-unsigned __stdcall remove_items( void *pArguments )
+unsigned __stdcall remove_items( void * /*pArguments*/ )
 {
 	// This will block every other thread from entering until the first thread is complete.
 	EnterCriticalSection( &pe_cs );
@@ -898,7 +892,7 @@ unsigned __stdcall remove_items( void *pArguments )
 	return 0;
 }
 
-unsigned __stdcall show_hide_items( void *pArguments )
+unsigned __stdcall show_hide_items( void * /*pArguments*/ )
 {
 	// This will block every other thread from entering until the first thread is complete.
 	EnterCriticalSection( &pe_cs );
@@ -989,7 +983,7 @@ unsigned __stdcall show_hide_items( void *pArguments )
 	return 0;
 }
 
-unsigned __stdcall verify_checksums( void *pArguments )
+unsigned __stdcall verify_checksums( void * /*pArguments*/ )
 {
 	// This will block every other thread from entering until the first thread is complete.
 	EnterCriticalSection( &pe_cs );

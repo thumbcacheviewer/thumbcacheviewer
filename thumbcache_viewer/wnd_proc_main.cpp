@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -35,6 +35,8 @@ HWND g_hWnd_edit = NULL;			// Handle to the listview edit control.
 // Window variables
 int cx = 0;							// Current x (left) position of the main window based on the mouse.
 int cy = 0;							// Current y (top) position of the main window based on the mouse.
+
+int g_border_width = 0;				// Window border width.
 
 RECT last_pos = { 0 };				// The last position of the image window.
 
@@ -208,12 +210,12 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
 			lvc.fmt = LVCFMT_CENTER;
 			lvc.pszText = "#";
-			lvc.cx = 34;
+			lvc.cx = 35;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 0, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = "Filename";
-			lvc.cx = 135;
+			lvc.cx = 145;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_RIGHT;
@@ -222,11 +224,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 2, ( LPARAM )&lvc );
 
 			lvc.pszText = "Cache Entry Size";
-			lvc.cx = 95;
+			lvc.cx = 110;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 3, ( LPARAM )&lvc );
 
 			lvc.pszText = "Data Offset";
-			lvc.cx = 88;
+			lvc.cx = 90;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 4, ( LPARAM )&lvc );
 
 			lvc.pszText = "Data Size";
@@ -247,15 +249,33 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 8, ( LPARAM )&lvc );
 
 			lvc.pszText = "System";
-			lvc.cx = 85;
+			lvc.cx = 95;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 9, ( LPARAM )&lvc );
 
 			lvc.pszText = "Location";
-			lvc.cx = 200;
+			lvc.cx = 600;
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 10, ( LPARAM )&lvc );
 
 			// Save our initial window position.
 			GetWindowRect( hWnd, &last_pos );
+
+			// Windows 10 uses an invisible border that we need to take into account when snapping the window.
+			OSVERSIONINFOEX osvi;
+			memset( &osvi, 0, sizeof( OSVERSIONINFOEX ) );
+			osvi.dwOSVersionInfoSize = sizeof( OSVERSIONINFOEX );
+			osvi.dwMajorVersion = HIBYTE( _WIN32_WINNT_WIN10 );
+			osvi.dwMinorVersion = LOBYTE( _WIN32_WINNT_WIN10 );
+			//osvi.wServicePackMajor = 0;
+
+			DWORDLONG const dwlConditionMask = VerSetConditionMask( VerSetConditionMask( VerSetConditionMask( 0, VER_MAJORVERSION, VER_GREATER_EQUAL ), VER_MINORVERSION, VER_GREATER_EQUAL ), VER_SERVICEPACKMAJOR, VER_GREATER_EQUAL );
+
+			if ( VerifyVersionInfo( &osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR, dwlConditionMask ) != FALSE )
+			{
+				RECT rc;
+				GetClientRect( hWnd, &rc );
+
+				g_border_width = ( ( last_pos.right - last_pos.left - rc.right ) / 2 ) - 1; // Leave the 1 px border.
+			}
 
 			return 0;
 		}
@@ -275,67 +295,73 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			POINT cur_pos;
 			RECT wa;
 			RECT *rc = ( RECT * )lParam;
+
 			GetCursorPos( &cur_pos );
 			OffsetRect( rc, cur_pos.x - ( rc->left + cx ), cur_pos.y - ( rc->top + cy ) );
 
 			// Allow our main window to attach to the desktop edge.
-			SystemParametersInfo( SPI_GETWORKAREA, 0, &wa, 0 );			
-			if( is_close( rc->left, wa.left ) )				// Attach to left side of the desktop.
+			//SystemParametersInfo( SPI_GETWORKAREA, 0, &wa, 0 );
+			HMONITOR hMon = MonitorFromWindow( hWnd, MONITOR_DEFAULTTONEAREST );
+			MONITORINFO mi;
+			mi.cbSize = sizeof( MONITORINFO );
+			GetMonitorInfo( hMon, &mi );
+
+			if ( is_close( rc->left + g_border_width, mi.rcWork.left ) )				// Attach to left side of the desktop.
 			{
-				OffsetRect( rc, wa.left - rc->left, 0 );
+				OffsetRect( rc, mi.rcWork.left - rc->left - g_border_width, 0 );
 			}
-			else if ( is_close( wa.right, rc->right ) )		// Attach to right side of the desktop.
+			else if ( is_close( mi.rcWork.right, rc->right - g_border_width ) )			// Attach to right side of the desktop.
 			{
-				OffsetRect( rc, wa.right - rc->right, 0 );
+				OffsetRect( rc, mi.rcWork.right - rc->right + g_border_width, 0 );
 			}
 
-			if( is_close( rc->top, wa.top ) )				// Attach to top of the desktop.
+			if ( is_close( rc->top, mi.rcWork.top ) )									// Attach to top of the desktop.
 			{
-				OffsetRect( rc, 0, wa.top - rc->top );
+				OffsetRect( rc, 0, mi.rcWork.top - rc->top );
 			}
-			else if ( is_close( wa.bottom, rc->bottom ) )	// Attach to bottom of the desktop.
+			else if ( is_close( mi.rcWork.bottom, rc->bottom - g_border_width ) )		// Attach to bottom of the desktop.
 			{
-				OffsetRect( rc, 0, wa.bottom - rc->bottom );
+				OffsetRect( rc, 0, mi.rcWork.bottom - rc->bottom + g_border_width );
 			}
 
 			// Allow our main window to attach to the image window.
 			GetWindowRect( g_hWnd_image, &wa );
 			if ( !is_attached && IsWindowVisible( g_hWnd_image ) == TRUE )
 			{
-				if( is_close( rc->right, wa.left ) )			// Attach to left side of image window.
+				if ( is_close( rc->right - g_border_width, wa.left + g_border_width ) )			// Attach to left side of image window.
 				{
 					// Allow it to snap only to the dimensions of the image window.
 					if ( ( rc->bottom > wa.top ) && ( rc->top < wa.bottom ) )
 					{
-						OffsetRect( rc, wa.left - rc->right, 0 );
+						OffsetRect( rc, wa.left - rc->right + ( g_border_width * 2 ), 0 );
 						is_attached = true;
 					}
 				}
-				else if ( is_close( wa.right, rc->left ) )		// Attach to right side of image window.
+				else if ( is_close( wa.right - g_border_width, rc->left + g_border_width ) )	// Attach to right side of image window.
 				{
 					// Allow it to snap only to the dimensions of the image window.
 					if ( ( rc->bottom > wa.top ) && ( rc->top < wa.bottom ) )
 					{
-						OffsetRect( rc, wa.right - rc->left, 0 );
+						OffsetRect( rc, wa.right - rc->left - ( g_border_width * 2 ), 0 );
 						is_attached = true;
 					}
 				}
 
-				if( is_close( rc->bottom, wa.top ) )			// Attach to top of image window.
+				if ( is_close( rc->bottom - g_border_width, wa.top ) )			// Attach to top of image window.
 				{
 					// Allow it to snap only to the dimensions of the image window.
 					if ( ( rc->left < wa.right ) && ( rc->right > wa.left ) )
 					{
-						OffsetRect( rc, 0, wa.top - rc->bottom );
+						OffsetRect( rc, 0, wa.top - rc->bottom + g_border_width );
 						is_attached = true;
 					}
 				}
-				else if ( is_close( wa.bottom, rc->top ) )		// Attach to bottom of image window.
+				else if ( is_close( wa.bottom - g_border_width, rc->top ) )		// Attach to bottom of image window.
 				{
 					// Allow it to snap only to the dimensions of the image window.
 					if ( ( rc->left < wa.right ) && ( rc->right > wa.left ) )
 					{
-						OffsetRect( rc, 0, wa.bottom - rc->top );
+						OffsetRect( rc, 0, wa.bottom - rc->top - g_border_width );
 						is_attached = true;
 					}
 				}
@@ -408,7 +434,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_MEASUREITEM:
 		{
 			// Set the row height of the list view.
-			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType = ODT_LISTVIEW )
+			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType == ODT_LISTVIEW )
 			{
 				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height;
 			}
@@ -416,15 +442,15 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		}
 		break;
 
-		case WM_GETMINMAXINFO:
+		/*case WM_GETMINMAXINFO:
 		{
 			// Set the minimum dimensions that the window can be sized to.
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT;
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH / 2;
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT / 2;
 			
 			return 0;
 		}
-		break;
+		break;*/
 
 		case WM_CHANGE_CURSOR:
 		{
@@ -439,6 +465,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				SetCursor( LoadCursor( NULL, IDC_ARROW ) );	// Default arrow.
 				wait_cursor = NULL;
 			}
+
+			return 0;
 		}
 		break;
 
@@ -645,7 +673,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						lvi.mask = LVIF_STATE;
 						lvi.state = LVIS_SELECTED;
 						lvi.stateMask = LVIS_SELECTED;
-						SendMessage( g_hWnd_list, LVM_SETITEMSTATE, -1, ( LPARAM )&lvi );
+						SendMessage( g_hWnd_list, LVM_SETITEMSTATE, ( WPARAM )-1, ( LPARAM )&lvi );
 
 						UpdateMenus( UM_ENABLE );
 					}
@@ -655,7 +683,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					{
 						LVITEM lvi = { NULL };
 						lvi.mask = LVIF_PARAM;
-						lvi.iItem = ( int )SendMessage( g_hWnd_list, LVM_GETNEXTITEM, -1, LVNI_FOCUSED | LVNI_SELECTED );
+						lvi.iItem = ( int )SendMessage( g_hWnd_list, LVM_GETNEXTITEM, ( WPARAM )-1, LVNI_FOCUSED | LVNI_SELECTED );
 
 						if ( lvi.iItem != -1 )
 						{
@@ -666,9 +694,19 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					}
 					break;
 
+					case MENU_HOME_PAGE:
+					{
+						CoInitializeEx( NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE );
+
+						ShellExecute( NULL, L"open", HOME_PAGE, NULL, NULL, SW_SHOWNORMAL );
+
+						CoUninitialize();
+					}
+					break;
+
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.6\r\n\r\nCopyright \xA9 2011-2018 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.7\r\n\r\nCopyright \xA9 2011-2021 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -989,7 +1027,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Move our image window next to the main window on its right side if it's the first time we're showing the image window.
 							if ( !first_show )
 							{
-								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right, last_pos.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
+								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right - ( g_border_width * 2 ), last_pos.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
 								first_show = true;
 							}
 
@@ -1057,7 +1095,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				case LVN_BEGINLABELEDIT:
 				{
 					NMLVDISPINFO *pdi = ( NMLVDISPINFO * )lParam;
-					
+
 					// If no item is being edited, then cancel the edit.
 					if ( pdi->item.iItem == -1 )
 					{
@@ -1471,6 +1509,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_DESTROY_ALT:
 		{
 			DestroyWindow( hWnd );
+
+			return 0;
 		}
 		break;
 
@@ -1535,7 +1575,6 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		}
 		break;
 	}
-	return TRUE;
 }
 
 LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -1545,7 +1584,7 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 		// This will essentially reconstruct the string that the open file dialog box creates when selecting multiple files.
 		case WM_DROPFILES:
 		{
-			int count = DragQueryFile( ( HDROP )wParam, -1, NULL, 0 );
+			int count = DragQueryFile( ( HDROP )wParam, ( UINT )-1, NULL, 0 );
 
 			pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
 			pi->type = 0;
@@ -1570,7 +1609,7 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 					if ( pi->filepath == NULL )
 					{
 						pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ( MAX_PATH * count ) + 1 ) );
-						pi->offset = file_path_length;
+						pi->offset = ( unsigned short )file_path_length;
 						// Find the last occurance of "\" in the string.
 						while ( pi->offset != 0 && fpath[ --pi->offset ] != L'\\' );
 

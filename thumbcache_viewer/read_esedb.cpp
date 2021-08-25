@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -676,7 +676,7 @@ char *get_column_name( wchar_t *name, unsigned long name_length )
 // In the MSysObjects table, columns with a flag mask of 0x80 or 0x10 (not sure which) causes JetRetrieveColumns in update_scan_info(...) to fail. They aren't listed in SystemIndex_0P.
 JET_ERR get_column_info()
 {
-	long type = 0, docid = 0;
+	long type = 0;
 	unsigned char jet_compress = 0;
 	JET_COLUMNDEF name_column = { 0 }, type_column = { 0 }, jet_compress_column = { 0 }, system_index_0a_column = { 0 };
 
@@ -742,7 +742,7 @@ JET_ERR get_column_info()
 
 	if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	while ( true )
+	for ( ;; )
 	{
 		// Stop processing and exit the thread.
 		if ( g_kill_scan )
@@ -883,7 +883,7 @@ JET_ERR get_column_info_win8()
 
 	if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	while ( true )
+	for ( ;; )
 	{
 		// Stop processing and exit the thread.
 		if ( g_kill_scan )
@@ -930,7 +930,7 @@ JET_ERR get_column_info_win8()
 
 		if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-		while ( true )
+		for ( ;; )
 		{
 			// Stop processing and exit the thread.
 			if ( g_kill_scan )

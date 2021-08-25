@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -413,7 +413,7 @@ void traverse_ese_database()
 		build_retrieve_column_array();
 	}
 
-	while ( true )
+	for ( ;; )
 	{
 		// We don't want to continue scanning if the user cancels the scan.
 		if ( g_kill_scan )

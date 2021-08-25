@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2018 Eric Kutcher
+	Copyright (C) 2011-2021 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -23,6 +23,8 @@
 #include "dllrbt.h"
 
 #define SNAP_WIDTH		10		// The minimum distance at which our windows will attach together.
+
+#define is_close( a, b ) ( abs( ( a ) - ( b ) ) < SNAP_WIDTH )
 
 #define ntohl( i ) ( ( ( ( unsigned long )( i ) & 0xFF000000 ) >> 24 ) | \
 					 ( ( ( unsigned long )( i ) & 0x00FF0000 ) >> 8 ) | \
@@ -48,8 +50,6 @@ void cleanup_blank_entries();
 void create_fileinfo_tree();
 void cleanup_fileinfo_tree();
 void cleanup_extended_info( extended_info *ei );
-
-bool is_close( int a, int b );
 
 void Processing_Window( bool enable );
 
