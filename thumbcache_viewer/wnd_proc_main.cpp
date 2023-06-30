@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2021 Eric Kutcher
+	Copyright (C) 2011-2023 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -706,7 +706,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.7\r\n\r\nCopyright \xA9 2011-2021 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.8\r\n\r\nCopyright \xA9 2011-2023 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 

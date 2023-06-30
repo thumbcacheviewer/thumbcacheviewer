@@ -1,6 +1,6 @@
 /*
 	thumbcache_viewer will extract thumbnail images from thumbcache database files.
-	Copyright (C) 2011-2021 Eric Kutcher
+	Copyright (C) 2011-2023 Eric Kutcher
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -425,12 +425,6 @@ void traverse_ese_database()
 		if ( ( g_err = JetRetrieveColumns( g_sesid, g_tableid_0A, rc, 4 ) ) != JET_errSuccess )
 		{
 			break;
-		}
-
-		// For XP and 7
-		if ( g_use_big_endian )
-		{
-			file_attributes = ntohl( file_attributes );
 		}
 
 		// See if the entry is a folder.
