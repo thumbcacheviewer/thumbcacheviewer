@@ -1,6 +1,6 @@
 /*
     thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2019 Eric Kutcher
+    Copyright (C) 2011-2023 Eric Kutcher
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+
+#include "read_esedb.h"
 
 // Magic identifiers for various image formats.
 #define FILE_TYPE_BMP	"BM"
@@ -168,11 +170,14 @@ int wmain( int argc, wchar_t *argv[] )
 
 	// Ask user for input filename.
 	wchar_t name[ MAX_PATH ] = { 0 };
+	wchar_t edbname[ MAX_PATH ] = { 0 };
 	wchar_t output_path[ MAX_PATH ] = { 0 };
+
+	printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.9\nCopyright (c) 2011-2023 Eric Kutcher\n\n" );
+
 	if ( argc == 1 )
 	{
-		printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.8\nCopyright (c) 2011-2019 Eric Kutcher\n\n" \
-				"Please enter the path to the thumbcache database: " );
+		printf( "Please enter the path to the thumbcache database: " );
 		fgetws( name, MAX_PATH, stdin );
 
 		// Remove the newline character if it was appended.
@@ -180,6 +185,16 @@ int wmain( int argc, wchar_t *argv[] )
 		if ( name[ input_length - 1 ] == L'\n' )
 		{
 			name[ input_length - 1 ] = L'\0';
+		}
+
+		printf( "Please enter the path to the Windows Search database (Press Enter to skip): " );
+		fgetws( edbname, MAX_PATH, stdin );
+
+		// Remove the newline character if it was appended.
+		input_length = wcslen( edbname );
+		if ( edbname[ input_length - 1 ] == L'\n' )
+		{
+			edbname[ input_length - 1 ] = L'\0';
 		}
 
 		printf( "Select a report to output:\n 1\tHTML\n 2\tComma-separated values (CSV)\n 3\tHTML and CSV\n 0\tNo report\nSelect: " );
@@ -197,35 +212,35 @@ int wmain( int argc, wchar_t *argv[] )
 			output_html = output_csv = true;
 		}
 
-		if ( output_html || output_csv )
+		printf( "Do you want to skip reporting 0 byte files? (Y/N) " );
+		while ( getwchar() != L'\n' );	// Clear the input buffer.
+		choice = getwchar();		// Newline character will remain in buffer.
+		if ( choice == L'y' || choice == L'Y' )
 		{
-			printf( "Do you want to skip reporting 0 byte files? (Y/N) " );
-			while ( getwchar() != L'\n' );	// Clear the input buffer.
-			choice = getwchar();		// Newline character will remain in buffer.
-			if ( choice == L'y' || choice == L'Y' )
-			{
-				skip_blank = true;
-			}
+			skip_blank = true;
+		}
 
-			printf( "Do you want to extract the thumbnail images? (Y/N) " );
-			while ( getwchar() != L'\n' );	// Clear the input buffer.
-			choice = getwchar();				// Newline character will remain in buffer.
-			if ( choice == L'n' || choice == L'N' )
-			{
-				extract_thumbnails = false;
-			}
+		printf( "Do you want to extract the thumbnail images? (Y/N) " );
+		while ( getwchar() != L'\n' );	// Clear the input buffer.
+		choice = getwchar();				// Newline character will remain in buffer.
+		if ( choice == L'n' || choice == L'N' )
+		{
+			extract_thumbnails = false;
 		}
 
 		while ( getwchar() != L'\n' );		// Clear the input buffer.
 
-		printf( "Please enter a path to output the thumbcache database files (Press Enter for the current directory): " );
-		fgetws( output_path, MAX_PATH, stdin );
-
-		// Remove the newline character if it was appended.
-		input_length = wcslen( output_path );
-		if ( output_path[ input_length - 1 ] == L'\n' )
+		if ( output_html || output_csv || extract_thumbnails )
 		{
-			output_path[ input_length - 1 ] = L'\0';
+			printf( "Please enter a path to output the thumbcache database files (Press Enter for the current directory): " );
+			fgetws( output_path, MAX_PATH, stdin );
+
+			// Remove the newline character if it was appended.
+			input_length = wcslen( output_path );
+			if ( output_path[ input_length - 1 ] == L'\n' )
+			{
+				output_path[ input_length - 1 ] = L'\0';
+			}
 		}
 	}
 	else
@@ -241,6 +256,18 @@ int wmain( int argc, wchar_t *argv[] )
 			{
 				switch ( argv[ i ][ 1 ] )
 				{
+					case 'e':
+					case 'E':
+					{
+						// Make sure our Windows Search database switch is not the second to last argument.
+						if ( i < ( argc - 2 ) )
+						{
+							arg_len = wcslen( argv[ ++i ] );
+							wmemcpy_s( edbname, MAX_PATH, argv[ i ], ( arg_len > MAX_PATH ? MAX_PATH : arg_len ) );
+						}
+					}
+					break;
+
 					case 'o':
 					case 'O':
 					{
@@ -292,28 +319,26 @@ int wmain( int argc, wchar_t *argv[] )
 					case 'h':
 					case 'H':
 					{
-						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.8\nCopyright (c) 2011-2019 Eric Kutcher\n\n" \
-								"thumbcache_viewer_cmd [-o directory][-w][-c][-z][-n][-d directory] thumbcache_*.db\n" \
+						printf( "thumbcache_viewer_cmd [-o directory] [-w] [-c] [-z] [-n] [-d directory] [-e Windows.edb] thumbcache_*.db\n" \
 								" -o\tSet the output directory for thumbnails and reports.\n" \
 								" -w\tGenerate an HTML report.\n" \
 								" -c\tGenerate a comma-separated values (CSV) report.\n" \
 								" -z\tIgnore 0 byte files when generating a report.\n" \
 								" -n\tDo not extract thumbnails.\n" \
-								" -d\tLoad a directory of databases instead of a single file.\n" );
-						return 0;
-					}
-					break;
-
-					case 'a':
-					case 'A':
-					{
-						printf( "\nThumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.1.8\nCopyright (c) 2011-2019 Eric Kutcher\n" );
+								" -d\tLoad a directory of databases instead of a single file.\n" \
+								" -e\tLoad a Windows Search database to map hash values.\n" );
 						return 0;
 					}
 					break;
 				}
 			}
 		}
+	}
+
+	if ( edbname[ 0 ] != L'\0' )
+	{
+		printf( "Attempting to open the Windows Search database.\n" );
+		load_esedb_info( edbname );
 	}
 
 	printf( "Attempting to open the thumbcache database.\n" );
@@ -727,7 +752,7 @@ int wmain( int argc, wchar_t *argv[] )
 				}
 				else
 				{
-					int buf_size = utf8_name_length + utf8_path_length + 566;
+					int buf_size = utf8_name_length + utf8_path_length + 581;
 					char *buf = ( char * )malloc( sizeof( char ) * buf_size );
 					int write_size = 0;
 
@@ -740,7 +765,7 @@ int wmain( int argc, wchar_t *argv[] )
 						}
 
 						write_size += sprintf_s( buf, buf_size,
-									"<html><head><title>HTML Report</title></head><body>" );
+									"<!DOCTYPE html><html><head><title>HTML Report</title></head><body>" );
 					}
 
 					write_size += sprintf_s( buf + write_size, buf_size - write_size,
@@ -990,8 +1015,8 @@ int wmain( int argc, wchar_t *argv[] )
 				printf( "Cache size: %lu bytes\n", cache_entry_size );
 
 				// The entry hash may be the same as the filename.
-				char s_entry_hash[ 19 ] = { 0 };
-				sprintf_s( s_entry_hash, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ) );	// This will probably be the same as the file name.
+				char s_entry_hash[ 17 ] = { 0 };
+				sprintf_s( s_entry_hash, 17, "%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ) );	// This will probably be the same as the file name.
 				printf_s( "Entry hash: %s\n", s_entry_hash );
 
 				// Windows Vista
@@ -1024,13 +1049,13 @@ int wmain( int argc, wchar_t *argv[] )
 				printf( "Unknown value: 0x%04x\n", unknown );
 
 				// CRC-64 data checksum.
-				char s_data_checksum[ 19 ] = { 0 };
-				sprintf_s( s_data_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum ) ) );
+				char s_data_checksum[ 17 ] = { 0 };
+				sprintf_s( s_data_checksum, 17, "%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->data_checksum ) ) );
 				printf_s( "Data checksum (CRC-64): %s\n", s_data_checksum );
 
 				// CRC-64 header checksum.
-				char s_header_checksum[ 19 ] = { 0 };
-				sprintf_s( s_header_checksum, 19, "0x%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum ) ) );
+				char s_header_checksum[ 17 ] = { 0 };
+				sprintf_s( s_header_checksum, 17, "%016llx", ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->header_checksum : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->header_checksum : ( ( database_cache_entry_8 * )database_cache_entry )->header_checksum ) ) );
 				printf_s( "Header checksum (CRC-64): %s\n", s_header_checksum );
 
 				// Since the database can store CLSIDs that extend beyond MAX_PATH, we'll have to set a larger truncation length. A length of 32767 would probably never be seen. 
@@ -1217,6 +1242,11 @@ int wmain( int argc, wchar_t *argv[] )
 					free( utf8_filename );
 				}
 
+				if ( !skip_blank || ( skip_blank && data_size > 0 ) )
+				{
+					map_esedb_hash( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ), output_html, hFile_html );
+				}
+
 				// Output the data with the given (UTF-16) filename.
 				printf( "---------------------------------------------\n" );
 				if ( data_size != 0 && extract_thumbnails )
@@ -1317,6 +1347,9 @@ int wmain( int argc, wchar_t *argv[] )
 	{
 		FindClose( hFind );	// Close the find file handle.
 	}
+
+	// Cleanup and reset all values associated with processing the ese database.
+	cleanup_esedb_info();
 
 	return 0;
 }
