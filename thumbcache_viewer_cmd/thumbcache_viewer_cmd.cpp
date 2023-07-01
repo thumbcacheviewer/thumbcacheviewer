@@ -864,7 +864,7 @@ int wmain( int argc, wchar_t *argv[] )
 					}
 					else
 					{
-						int buf_size = utf8_name_length + utf8_path_length + 581;
+						int buf_size = utf8_name_length + utf8_path_length + 630;
 						char *buf = ( char * )malloc( sizeof( char ) * buf_size );
 						int write_size = 0;
 
@@ -877,7 +877,7 @@ int wmain( int argc, wchar_t *argv[] )
 							}
 
 							write_size += sprintf_s( buf, buf_size,
-										"<!DOCTYPE html><html><head><title>HTML Report</title></head><body>" );
+										"<!DOCTYPE html><html><head><title>HTML Report</title><style>pre{font-family:inherit;margin:0;}</style></head><body>" );
 						}
 
 						write_size += sprintf_s( buf + write_size, buf_size - write_size,

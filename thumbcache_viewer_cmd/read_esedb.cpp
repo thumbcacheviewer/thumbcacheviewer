@@ -1378,10 +1378,20 @@ void map_esedb_hash( unsigned long long hash, bool output_html, HANDLE hFile_htm
 
 									length = WideCharToMultiByte( CP_UTF8, 0, ei->property_value, -1, NULL, 0, NULL, NULL );
 									char *val = ( char * )malloc( sizeof( char ) * length ); // Size includes the null character.
-									WideCharToMultiByte( CP_UTF8, 0, ei->property_value, -1, val, length, NULL, NULL );
+									length = WideCharToMultiByte( CP_UTF8, 0, ei->property_value, -1, val, length, NULL, NULL ) - 1;
 
-									write_size = sprintf_s( buf, 1024, "<tr><td></td><td>%s</td><td colspan=\"8\">%s</td></tr>", name, val );
-									WriteFile( hFile_html, buf, write_size, &written, NULL );
+									if ( length > 512 )
+									{
+										write_size = sprintf_s( buf, 1024, "<tr><td></td><td>%s</td><td colspan=\"8\"><pre>", name );
+										WriteFile( hFile_html, buf, write_size, &written, NULL );
+										WriteFile( hFile_html, val, length, &written, NULL );
+										WriteFile( hFile_html, "</pre></td></tr>", 16, &written, NULL );
+									}
+									else
+									{
+										write_size = sprintf_s( buf, 1024, "<tr><td></td><td>%s</td><td colspan=\"8\"><pre>%s</pre></td></tr>", name, val );
+										WriteFile( hFile_html, buf, write_size, &written, NULL );
+									}
 
 									free( name );
 									free( val );
