@@ -22,6 +22,7 @@
 
 #include "lite_mssrch.h"
 #include "lite_msscb.h"
+#include "lite_sqlite3.h"
 
 // We want to get these objects before the window is shown.
 
@@ -211,7 +212,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 			if ( argCount > 1 )
 			{
 				// Allocate enough space to hold each parameter. They should all be full paths.
-				pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+				PATH_INFO *pi = ( PATH_INFO * )malloc( sizeof( PATH_INFO ) );
 				pi->type = 0;
 				pi->offset = 0;
 				pi->output_path = NULL;
@@ -344,6 +345,7 @@ CLEANUP:
 	// Unload the modules if they were initialized.
 	UnInitializeMsSrch();
 	UnInitializeMsSCB();
+	UnInitializeSQLite3();
 
 	if ( fail_type == 1 )
 	{

@@ -25,16 +25,16 @@
 
 #include <stdio.h>
 
-HANDLE shutdown_semaphore = NULL;	// Blocks shutdown while a worker thread is active.
-bool g_kill_thread = false;			// Allow for a clean shutdown.
+HANDLE g_shutdown_semaphore = NULL;		// Blocks shutdown while a worker thread is active.
+bool g_kill_thread = false;				// Allow for a clean shutdown.
 
-CRITICAL_SECTION pe_cs;				// Queues additional worker threads.
-bool in_thread = false;				// Flag to indicate that we're in a worker thread.
-bool skip_draw = false;				// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
+CRITICAL_SECTION pe_cs;					// Queues additional worker threads.
+bool in_thread = false;					// Flag to indicate that we're in a worker thread.
+bool skip_draw = false;					// Prevents WM_DRAWITEM from accessing listview items while we're removing them.
 
-linked_list *g_be = NULL;			// A list to hold all of the blank entries.
+LINKED_LIST *g_be = NULL;				// A list to hold all of the blank entries.
 
-dllrbt_tree *fileinfo_tree = NULL;	// Red-black tree of fileinfo structures.
+dllrbt_tree *g_file_info_tree = NULL;	// Red-black tree of FILE_INFO structures.
 
 void Processing_Window( bool enable )
 {
@@ -70,14 +70,14 @@ int dllrbt_compare( void *a, void *b )
 	return 0;
 }
 
-wchar_t *get_extension_from_filename( wchar_t *filename, unsigned long length )
+wchar_t *GetExtensionFromFilename( wchar_t *filename, unsigned long length )
 {
 	while ( length != 0 && filename[ --length ] != L'.' );
 
 	return filename + length;
 }
 
-wchar_t *get_filename_from_path( wchar_t *path, unsigned long length )
+wchar_t *GetFilenameFromPath( wchar_t *path, unsigned long length )
 {
 	while ( length != 0 && path[ --length ] != L'\\' );
 
@@ -88,7 +88,7 @@ wchar_t *get_filename_from_path( wchar_t *path, unsigned long length )
 	return path + length;
 }
 
-wchar_t *get_sfgao( unsigned long sfgao_flags )
+wchar_t *GetSFGAOStr( unsigned long sfgao_flags )
 {
 	wchar_t *ret = NULL;
 	if ( sfgao_flags == 0 )
@@ -174,7 +174,7 @@ wchar_t *get_sfgao( unsigned long sfgao_flags )
 	return ret;
 }
 
-wchar_t *get_file_attributes( unsigned long fa_flags )
+wchar_t *GetFileAttributesStr( unsigned long fa_flags )
 {
 	wchar_t *ret = NULL;
 	if ( fa_flags == 0 )
@@ -230,9 +230,9 @@ wchar_t *get_file_attributes( unsigned long fa_flags )
 	return ret;
 }
 
-void cleanup_extended_info( extended_info *ei )
+void CleanupExtendedInfo( EXTENDED_INFO *ei )
 {
-	extended_info *d_ei = NULL;
+	EXTENDED_INFO *d_ei = NULL;
 	while ( ei != NULL )
 	{
 		d_ei = ei;
@@ -255,11 +255,11 @@ void cleanup_extended_info( extended_info *ei )
 	}
 }
 
-void cleanup_blank_entries()
+void CleanupBlankEntries()
 {
-	// Go through the list of blank entries and free any shared info and fileinfo structures.
-	linked_list *be = g_be;
-	linked_list *del_be = NULL;
+	// Go through the list of blank entries and free any shared info and FILE_INFO structures.
+	LINKED_LIST *be = g_be;
+	LINKED_LIST *del_be = NULL;
 	while ( be != NULL )
 	{
 		del_be = be;
@@ -277,7 +277,7 @@ void cleanup_blank_entries()
 				}
 			}
 
-			cleanup_extended_info( del_be->fi->ei );
+			CleanupExtendedInfo( del_be->fi->ei );
 
 			free( del_be->fi->filename );
 			free( del_be->fi );
@@ -287,17 +287,17 @@ void cleanup_blank_entries()
 	}
 }
 
-void cleanup_fileinfo_tree()
+void CleanupFileinfoTree()
 {
-	// Free the values of the fileinfo tree.
-	node_type *node = dllrbt_get_head( fileinfo_tree );
+	// Free the values of the file info tree.
+	node_type *node = dllrbt_get_head( g_file_info_tree );
 	while ( node != NULL )
 	{
 		// Free the linked list if there is one.
-		linked_list *fi_node = ( linked_list * )node->val;
+		LINKED_LIST *fi_node = ( LINKED_LIST * )node->val;
 		while ( fi_node != NULL )
 		{
-			linked_list *del_fi_node = fi_node;
+			LINKED_LIST *del_fi_node = fi_node;
 
 			fi_node = fi_node->next;
 
@@ -307,24 +307,24 @@ void cleanup_fileinfo_tree()
 		node = node->next;
 	}
 
-	// Clean up our fileinfo tree.
-	dllrbt_delete_recursively( fileinfo_tree );
-	fileinfo_tree = NULL;
+	// Clean up our file info tree.
+	dllrbt_delete_recursively( g_file_info_tree );
+	g_file_info_tree = NULL;
 }
 
-void create_fileinfo_tree()
+void CreateFileinfoTree()
 {
 	LVITEM lvi = { NULL };
 	lvi.mask = LVIF_PARAM;
 
-	fileinfo *fi = NULL;
+	FILE_INFO *fi = NULL;
 
 	int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 
-	// Create the fileinfo tree if it doesn't exist.
-	if ( fileinfo_tree == NULL )
+	// Create the file info tree if it doesn't exist.
+	if ( g_file_info_tree == NULL )
 	{
-		fileinfo_tree = dllrbt_create( dllrbt_compare );
+		g_file_info_tree = dllrbt_create( dllrbt_compare );
 	}
 
 	// Go through each item and add them to our tree.
@@ -338,13 +338,13 @@ void create_fileinfo_tree()
 
 		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-		fi = ( fileinfo * )lvi.lParam;
+		fi = ( FILE_INFO * )lvi.lParam;
 
-		// Don't attempt to insert the fileinfo if it's already in the tree.
+		// Don't attempt to insert the FILE_INFO if it's already in the tree.
 		if ( fi != NULL )
 		{
 			// Create the node to insert into a linked list.
-			linked_list *fi_node = ( linked_list * )malloc( sizeof( linked_list ) );
+			LINKED_LIST *fi_node = ( LINKED_LIST * )malloc( sizeof( LINKED_LIST ) );
 			fi_node->fi = fi;
 			fi_node->next = NULL;
 
@@ -382,17 +382,17 @@ void create_fileinfo_tree()
 			}
 
 			// See if our tree has the hash to add the node to.
-			linked_list *ll = ( linked_list * )dllrbt_find( fileinfo_tree, ( void * )fi->mapped_hash, true );
+			LINKED_LIST *ll = ( LINKED_LIST * )dllrbt_find( g_file_info_tree, ( void * )fi->mapped_hash, true );
 			if ( ll == NULL )
 			{
-				if ( dllrbt_insert( fileinfo_tree, ( void * )fi->mapped_hash, fi_node ) != DLLRBT_STATUS_OK )
+				if ( dllrbt_insert( g_file_info_tree, ( void * )fi->mapped_hash, fi_node ) != DLLRBT_STATUS_OK )
 				{
 					free( fi_node );
 				}
 			}
 			else	// If a hash exits, insert the node into the linked list.
 			{
-				linked_list *next = ll->next;	// We'll insert the node after the head.
+				LINKED_LIST *next = ll->next;	// We'll insert the node after the head.
 				fi_node->next = next;
 				ll->next = fi_node;
 			}
@@ -404,14 +404,14 @@ void create_fileinfo_tree()
 unsigned __stdcall cleanup( void * /*pArguments*/ )
 {
 	// This semaphore will be released when the thread gets killed.
-	shutdown_semaphore = CreateSemaphore( NULL, 0, 1, NULL );
+	g_shutdown_semaphore = CreateSemaphore( NULL, 0, 1, NULL );
 
 	g_kill_thread = true;	// Causes our secondary threads to cease processing and release the semaphore.
 
 	// Wait for any active threads to complete. 5 second timeout in case we miss the release.
-	WaitForSingleObject( shutdown_semaphore, 5000 );
-	CloseHandle( shutdown_semaphore );
-	shutdown_semaphore = NULL;
+	WaitForSingleObject( g_shutdown_semaphore, 5000 );
+	CloseHandle( g_shutdown_semaphore );
+	g_shutdown_semaphore = NULL;
 
 	// DestroyWindow won't work on a window from a different thread. So we'll send a message to trigger it.
 	SendMessage( g_hWnd_main, WM_DESTROY_ALT, 0, 0 );
@@ -465,8 +465,8 @@ unsigned __stdcall copy_items( void *pArguments )
 	char column_start = ( type == 1 ? 0 : 1 );
 	char column_end = ( type == 1 ? 2 : NUM_COLUMNS );
 
-	fileinfo *fi = NULL;
-	extended_info *ei = NULL;
+	FILE_INFO *fi = NULL;
+	EXTENDED_INFO *ei = NULL;
 
 	// Go through each item, and copy their lParam values.
 	for ( int i = 0; i < item_count; ++i )
@@ -490,7 +490,7 @@ unsigned __stdcall copy_items( void *pArguments )
 
 		if ( type == 1 )
 		{
-			ei = ( extended_info * )lvi.lParam;
+			ei = ( EXTENDED_INFO * )lvi.lParam;
 
 			if ( ei == NULL || ( ei != NULL && ei->sei == NULL ) )
 			{
@@ -499,7 +499,7 @@ unsigned __stdcall copy_items( void *pArguments )
 		}
 		else 
 		{
-			fi = ( fileinfo * )lvi.lParam;
+			fi = ( FILE_INFO * )lvi.lParam;
 
 			if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
 			{
@@ -733,9 +733,9 @@ CLEANUP:
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;
@@ -761,7 +761,7 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 	LVITEM lvi = { NULL };
 	lvi.mask = LVIF_PARAM;
 
-	fileinfo *fi = NULL;
+	FILE_INFO *fi = NULL;
 
 	int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 	int sel_count = ( int )SendMessage( g_hWnd_list, LVM_GETSELECTEDCOUNT, 0, 0 );
@@ -769,7 +769,7 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 	// See if we've selected all the items. We can clear the list much faster this way.
 	if ( item_count == sel_count )
 	{
-		// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
+		// Go through each item, and free their lParam values. current_file_info will get deleted here.
 		for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 		{
 			// Stop processing and exit the thread.
@@ -781,7 +781,7 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 			// We first need to get the lParam value otherwise the memory won't be freed.
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-			fi = ( fileinfo * )lvi.lParam;
+			fi = ( FILE_INFO * )lvi.lParam;
 
 			if ( fi != NULL )
 			{
@@ -796,14 +796,14 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 					}
 				}
 
-				// Close the info window if we're removing its fileinfo.
+				// Close the info window if we're removing its file info.
 				if ( fi == g_current_fi )
 				{
 					SendMessage( g_hWnd_info, WM_CLOSE, 0, 0 );
 				}
-				cleanup_extended_info( fi->ei );
+				CleanupExtendedInfo( fi->ei );
 
-				// Free our filename, then fileinfo structure.
+				// Free our filename, then FILE_INFO structure.
 				free( fi->filename );
 				free( fi );
 			}
@@ -840,7 +840,7 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 			lvi.iItem = index_array[ i ];
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-			fi = ( fileinfo * )lvi.lParam;
+			fi = ( FILE_INFO * )lvi.lParam;
 
 			if ( fi != NULL )
 			{
@@ -859,9 +859,9 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 				{
 					SendMessage( g_hWnd_info, WM_CLOSE, 0, 0 );
 				}
-				cleanup_extended_info( fi->ei );
+				CleanupExtendedInfo( fi->ei );
 				
-				// Free our filename, then fileinfo structure.
+				// Free our filename, then FILE_INFO structure.
 				free( fi->filename );
 				free( fi );
 			}
@@ -878,9 +878,9 @@ unsigned __stdcall remove_items( void * /*pArguments*/ )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;
@@ -909,8 +909,8 @@ unsigned __stdcall show_hide_items( void * /*pArguments*/ )
 	if ( !hide_blank_entries )	// Display the blank entries.
 	{
 		// This will reinsert the blank entry at the end of the listview.
-		linked_list *be = g_be;
-		linked_list *del_be = NULL;
+		LINKED_LIST *be = g_be;
+		LINKED_LIST *del_be = NULL;
 		g_be = NULL;
 		while ( be != NULL )
 		{
@@ -952,10 +952,10 @@ unsigned __stdcall show_hide_items( void * /*pArguments*/ )
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
 			// If the list item is blank, then add it to the blank entry linked list.
-			if ( lvi.lParam != NULL && ( ( fileinfo * )lvi.lParam )->size == 0 )
+			if ( lvi.lParam != NULL && ( ( FILE_INFO * )lvi.lParam )->size == 0 )
 			{
-				linked_list *be = ( linked_list * )malloc( sizeof( linked_list ) );
-				be->fi = ( fileinfo * )lvi.lParam;
+				LINKED_LIST *be = ( LINKED_LIST * )malloc( sizeof( LINKED_LIST ) );
+				be->fi = ( FILE_INFO * )lvi.lParam;
 				be->next = g_be;
 
 				g_be = be;
@@ -969,9 +969,9 @@ unsigned __stdcall show_hide_items( void * /*pArguments*/ )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;
@@ -1005,7 +1005,7 @@ unsigned __stdcall verify_checksums( void * /*pArguments*/ )
 	LVITEM lvi = { NULL };
 	lvi.mask = LVIF_PARAM;
 
-	fileinfo *fi = NULL;
+	FILE_INFO *fi = NULL;
 
 	int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
 
@@ -1020,7 +1020,7 @@ unsigned __stdcall verify_checksums( void * /*pArguments*/ )
 
 		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-		fi = ( fileinfo * )lvi.lParam;
+		fi = ( FILE_INFO * )lvi.lParam;
 		if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
 		{
 			continue;
@@ -1154,9 +1154,9 @@ unsigned __stdcall verify_checksums( void * /*pArguments*/ )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;
@@ -1254,7 +1254,7 @@ unsigned __stdcall save_csv( void *pArguments )
 			LVITEM lvi = { NULL };
 			lvi.mask = LVIF_PARAM;
 
-			fileinfo *fi = NULL;
+			FILE_INFO *fi = NULL;
 
 			// Go through all the items we'll be saving.
 			for ( lvi.iItem = 0; lvi.iItem < save_items; ++lvi.iItem )
@@ -1267,7 +1267,7 @@ unsigned __stdcall save_csv( void *pArguments )
 
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-				fi = ( fileinfo * )lvi.lParam;
+				fi = ( FILE_INFO * )lvi.lParam;
 				if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
 				{
 					continue;
@@ -1385,9 +1385,9 @@ unsigned __stdcall save_csv( void *pArguments )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 	else if ( cmd_line == 2 )	// Exit the program if we're done saving.
 	{
@@ -1413,7 +1413,7 @@ unsigned __stdcall save_items( void *pArguments )
 
 	Processing_Window( true );
 
-	save_param *save_type = ( save_param * )pArguments;
+	SAVE_INFO *save_type = ( SAVE_INFO * )pArguments;
 	if ( save_type != NULL )
 	{
 		wchar_t save_directory[ MAX_PATH ] = { 0 };
@@ -1445,7 +1445,7 @@ unsigned __stdcall save_items( void *pArguments )
 		lvi.mask = LVIF_PARAM;
 		lvi.iItem = -1;	// Set this to -1 so that the LVM_GETNEXTITEM call can go through the list correctly.
 
-		fileinfo *fi = NULL;
+		FILE_INFO *fi = NULL;
 
 		// Go through all the items we'll be saving.
 		for ( int i = 0; i < save_items; ++i )
@@ -1459,7 +1459,7 @@ unsigned __stdcall save_items( void *pArguments )
 			lvi.iItem = ( save_type->save_all ? i : ( int )SendMessage( g_hWnd_list, LVM_GETNEXTITEM, lvi.iItem, LVNI_SELECTED ) );
 			SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-			fi = ( fileinfo * )lvi.lParam;
+			fi = ( FILE_INFO * )lvi.lParam;
 			if ( fi == NULL || ( fi != NULL && ( fi->filename == NULL || fi->si == NULL ) ) )
 			{
 				continue;
@@ -1485,7 +1485,7 @@ unsigned __stdcall save_items( void *pArguments )
 					// Directory + backslash + filename + extension + NULL character = ( MAX_PATH * 2 ) + 6
 					wchar_t fullpath[ ( MAX_PATH * 2 ) + 6 ] = { 0 };
 
-					wchar_t *filename = get_filename_from_path( fi->filename, ( unsigned long )wcslen( fi->filename ) );
+					wchar_t *filename = GetFilenameFromPath( fi->filename, ( unsigned long )wcslen( fi->filename ) );
 
 					// Replace any invalid filename characters with an underscore "_".
 					wchar_t escaped_filename[ MAX_PATH ] = { 0 };
@@ -1516,7 +1516,7 @@ unsigned __stdcall save_items( void *pArguments )
 
 					if ( fi->flag & FIF_TYPE_BMP )
 					{
-						wchar_t *ext = get_extension_from_filename( escaped_filename, escaped_filename_length );
+						wchar_t *ext = GetExtensionFromFilename( escaped_filename, escaped_filename_length );
 						// The extension in the filename might not be the actual type. So we'll append .bmp to the end of it.
 						if ( _wcsicmp( ext, L".bmp" ) == 0 )
 						{
@@ -1529,7 +1529,7 @@ unsigned __stdcall save_items( void *pArguments )
 					}
 					else if ( fi->flag & FIF_TYPE_JPG )
 					{
-						wchar_t *ext = get_extension_from_filename( escaped_filename, escaped_filename_length );
+						wchar_t *ext = GetExtensionFromFilename( escaped_filename, escaped_filename_length );
 						// The extension in the filename might not be the actual type. So we'll append .jpg to the end of it.
 						if ( _wcsicmp( ext, L".jpg" ) == 0 || _wcsicmp( ext, L".jpeg" ) == 0 )
 						{
@@ -1542,7 +1542,7 @@ unsigned __stdcall save_items( void *pArguments )
 					}
 					else if ( fi->flag & FIF_TYPE_PNG )
 					{
-						wchar_t *ext = get_extension_from_filename( escaped_filename, escaped_filename_length );
+						wchar_t *ext = GetExtensionFromFilename( escaped_filename, escaped_filename_length );
 						// The extension in the filename might not be the actual type. So we'll append .png to the end of it.
 						if ( _wcsicmp( ext, L".png" ) == 0 )
 						{
@@ -1587,9 +1587,9 @@ unsigned __stdcall save_items( void *pArguments )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 	else if ( cmd_line == 2 )	// Exit the program if we're done saving.
 	{

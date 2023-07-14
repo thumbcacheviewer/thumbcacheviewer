@@ -25,12 +25,7 @@
 
 #include <stdio.h>
 
-#define JET_coltypUnsignedLong		14
-#define JET_coltypLongLong			15
-#define JET_coltypGUID				16
-#define JET_coltypUnsignedShort		17
-
-// Internal variables. All all freed/reset in cleanup_esedb_info.
+// Internal variables. All all freed/reset in CleanupESEDBInfo().
 JET_ERR g_err = JET_errSuccess;
 JET_INSTANCE g_instance = JET_instanceNil;
 JET_SESID g_sesid = JET_sesidNil;
@@ -39,12 +34,12 @@ JET_TABLEID g_tableid_0P = JET_tableidNil, g_tableid_0A = JET_tableidNil;
 JET_RETRIEVECOLUMN *g_rc_array = NULL;
 unsigned long g_column_count = 0;
 char *g_ascii_filepath = NULL;
-column_info *g_ci = NULL;
+COLUMN_INFO *g_ci = NULL;
 
-column_info *g_item_path_display = NULL;
-column_info *g_file_attributes = NULL;
-column_info *g_thumbnail_cache_id = NULL;
-column_info *g_file_extension = NULL;
+COLUMN_INFO *g_item_path_display = NULL;
+COLUMN_INFO *g_file_attributes = NULL;
+COLUMN_INFO *g_thumbnail_cache_id = NULL;
+COLUMN_INFO *g_file_extension = NULL;
 
 bool g_use_big_endian = true;
 unsigned long g_revision = 0;
@@ -54,7 +49,7 @@ int g_error_offset = 0;
 char g_error[ ERROR_BUFFER_SIZE ] = { 0 };
 unsigned char g_error_state = 0;
 
-wchar_t *uncompress_value( unsigned char *value, unsigned long value_length )
+wchar_t *UncompressValue( unsigned char *value, unsigned long value_length )
 {
 	wchar_t *ret_value = NULL;
 
@@ -74,10 +69,10 @@ wchar_t *uncompress_value( unsigned char *value, unsigned long value_length )
 	return ret_value;
 }
 
-void convert_values( extended_info **ei )
+void ConvertValues( EXTENDED_INFO **ei )
 {
-	extended_info *l_ei = *ei;
-	column_info *t_ci = g_ci;
+	EXTENDED_INFO *l_ei = *ei;
+	COLUMN_INFO *t_ci = g_ci;
 
 	int buf_count = 0;
 
@@ -96,7 +91,7 @@ void convert_values( extended_info **ei )
 			// Create a shared extended info structure to share the Windows Property names across entries.
 			if ( t_ci->sei == NULL )
 			{
-				t_ci->sei = ( shared_extended_info * )malloc( sizeof( shared_extended_info ) );
+				t_ci->sei = ( SHARED_EXTENDED_INFO * )malloc( sizeof( SHARED_EXTENDED_INFO ) );
 				t_ci->sei->count = 0;
 
 				t_ci->sei->windows_property = ( wchar_t * )malloc( sizeof( char ) * ( t_ci->Name_byte_length + sizeof( wchar_t ) ) );
@@ -107,7 +102,7 @@ void convert_values( extended_info **ei )
 
 			++( t_ci->sei->count );
 
-			extended_info *t_ei = ( extended_info * )malloc( sizeof( extended_info ) );
+			EXTENDED_INFO *t_ei = ( EXTENDED_INFO * )malloc( sizeof( EXTENDED_INFO ) );
 			t_ei->sei = t_ci->sei;
 			t_ei->property_value = NULL;
 			t_ei->next = NULL;
@@ -175,12 +170,12 @@ void convert_values( extended_info **ei )
 
 						if ( t_ci->Name_byte_length == 42 && wcscmp( t_ci->Name, L"System_FileAttributes" ) == 0 )
 						{
-							t_ei->property_value = get_file_attributes( val );
+							t_ei->property_value = GetFileAttributesStr( val );
 						}
 						else if ( ( t_ci->Name_byte_length == 34 && wcscmp( t_ci->Name, L"System_SFGAOFlags" ) == 0 ) ||
 								  ( t_ci->Name_byte_length == 56 && wcscmp( t_ci->Name, L"System_Link_TargetSFGAOFlags" ) == 0 ) )
 						{
-							t_ei->property_value = get_sfgao( val );
+							t_ei->property_value = GetSFGAOStr( val );
 						}
 						else
 						{
@@ -321,7 +316,7 @@ void convert_values( extended_info **ei )
 								buf_count = ( ( g_rc_array[ i ].cbActual * 2 ) + 6 + 1 );
 								t_ei->property_value = ( wchar_t * )malloc( sizeof( wchar_t ) * buf_count );
 
-								unsigned long property_value_offset = swprintf_s( t_ei->property_value, buf_count, L"{%04x-%02x-%02x-", val_1, val_2, val_3 );
+								unsigned long property_value_offset = swprintf_s( t_ei->property_value, buf_count, L"{%08x-%04x-%04x-", val_1, val_2, val_3 );
 								for ( unsigned long h = sizeof( unsigned long ) + ( sizeof( unsigned short ) * 2 ); h < g_rc_array[ i ].cbActual; ++h )
 								{
 									if ( h == 10 )
@@ -348,7 +343,7 @@ void convert_values( extended_info **ei )
 								unsigned char *data_copy = ( unsigned char * )malloc( sizeof( unsigned char ) * g_rc_array[ i ].cbActual );
 								memcpy_s( data_copy, sizeof( unsigned char ) * g_rc_array[ i ].cbActual, t_ci->data, g_rc_array[ i ].cbActual );
 
-								t_ei->property_value = uncompress_value( data_copy, g_rc_array[ i ].cbActual );
+								t_ei->property_value = UncompressValue( data_copy, g_rc_array[ i ].cbActual );
 
 								free( data_copy );
 
@@ -426,7 +421,7 @@ void convert_values( extended_info **ei )
 	}
 }
 
-void cleanup_esedb_info()
+void CleanupESEDBInfo()
 {
 	// Reverse the steps of initializing the Jet database engine, etc.
 	if ( g_sesid != JET_sesidNil )
@@ -484,14 +479,14 @@ void cleanup_esedb_info()
 	free( g_rc_array );
 	g_rc_array = NULL;
 
-	column_info *t_ci = g_ci;
-	column_info *d_ci = NULL;
+	COLUMN_INFO *t_ci = g_ci;
+	COLUMN_INFO *d_ci = NULL;
 	while ( t_ci != NULL )
 	{
 		d_ci = t_ci;
 		t_ci = t_ci->next;
 
-		// d_ci->sei will be freed with the fileinfo structure in wnd_proc_main.
+		// d_ci->sei will be freed with the FILE_INFO structure in wnd_proc_main.
 		free( d_ci->data );
 		free( d_ci->Name );
 		free( d_ci );
@@ -499,13 +494,13 @@ void cleanup_esedb_info()
 	g_ci = NULL;
 }
 
-void set_error_message( char *msg )
+void SetErrorMessage( char *msg )
 {
 	g_error_offset = sprintf_s( g_error, ERROR_BUFFER_SIZE, msg );
 }
 
 // Print out any error we've encountered.
-void handle_esedb_error()
+void HandleESEDBError()
 {
 	if ( g_err != JET_errSuccess )
 	{
@@ -534,40 +529,16 @@ void handle_esedb_error()
 	}
 }
 
-// g_ascii_filepath is freed in cleanup_esedb_info().
-JET_ERR init_esedb_info( wchar_t *database_filepath )
+// g_ascii_filepath is freed in CleanupESEDBInfo().
+JET_ERR InitESEDBInfo( wchar_t *database_filepath, unsigned long revision, unsigned long page_size )
 {
-	char *partial_header = NULL;
-	DWORD read = 0;
-
-	unsigned long cbPageSize = 0;
-
 	if ( database_filepath == NULL )
 	{
 		g_err = JET_errDatabaseNotFound;
 		goto CLEANUP;
 	}
 
-	// JetGetDatabaseFileInfo for Windows Vista doesn't seem to like weird page sizes so we'll get it manually.
-	HANDLE hFile = CreateFile( database_filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-	if ( hFile != INVALID_HANDLE_VALUE )
-	{
-		partial_header = ( char * )malloc( sizeof( char ) * 512 );
-
-		ReadFile( hFile, partial_header, sizeof( char ) * 512, &read, NULL );
-
-		CloseHandle( hFile );
-	}
-
-	// Make sure we got enough of the header and it has the magic identifier (0x89ABCDEF) for an ESE database.
-	if ( read < 512 || partial_header == NULL || memcmp( partial_header + 4, "\xEF\xCD\xAB\x89", sizeof( unsigned long ) ) != 0 )
-	{
-		g_err = JET_errDatabaseCorrupted;
-		goto CLEANUP;
-	}
-
-	memcpy_s( &g_revision, sizeof( unsigned long ), partial_header + 0xE8, sizeof( unsigned long ) );		// Revision number
-	memcpy_s( &cbPageSize, sizeof( unsigned long ), partial_header + 0xEC, sizeof( unsigned long ) );	// Page size
+	g_revision = revision;
 
 	// Vista and 8+ use little-endian
 	if ( g_revision == 0x0C || g_revision >= 0x14 )
@@ -589,10 +560,10 @@ JET_ERR init_esedb_info( wchar_t *database_filepath )
 	g_err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramMaxTemporaryTables, 0, NULL ); if ( g_err != JET_errSuccess ) { goto CLEANUP; }
 
 	// 2KB, 16KB, and 32KB page sizes were added to Windows 7 (0x11) and above.
-	if ( ( g_err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramDatabasePageSize, cbPageSize, NULL ) ) != JET_errSuccess ) 
+	if ( ( g_err = JetSetSystemParameter( NULL, JET_sesidNil, JET_paramDatabasePageSize, page_size, NULL ) ) != JET_errSuccess ) 
 	{
 		// The database engine doesn't like our page size. It's probably from Windows Vista (0x0C) or below.
-		if ( g_err == JET_errInvalidParameter && g_revision >= 0x11 ) { set_error_message( "The Microsoft Jet database engine is not supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows 7 or higher." ); }
+		if ( g_err == JET_errInvalidParameter && g_revision >= 0x11 ) { SetErrorMessage( "The Microsoft Jet database engine is not supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows 7 or higher." ); }
 		goto CLEANUP;
 	}
 
@@ -603,27 +574,25 @@ JET_ERR init_esedb_info( wchar_t *database_filepath )
 	if ( ( g_err = JetAttachDatabase( g_sesid, g_ascii_filepath, JET_bitDbReadOnly ) ) != JET_errSuccess )
 	{
 		g_error_state = 2;	// Don't detach database.
-		if ( g_err == JET_errDatabaseDirtyShutdown ) { set_error_message( "Please run esentutl.exe to recover or repair the database." ); }
-		else if ( g_err == JET_errDatabaseInvalidPath || g_err == JET_errDiskIO || g_err == JET_errInvalidPath || g_err == JET_errInvalidSystemPath ) { set_error_message( "The database could not be loaded from its current location.\r\n\r\nTry moving the database into the root directory and ensure that there are no Unicode characters in the path." ); }
-		else if ( g_err == JET_errReadVerifyFailure ) { set_error_message( "The Microsoft Jet database engine may not be supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows Vista or higher." ); }	// I see this with XP esent.dll.
+		if ( g_err == JET_errDatabaseDirtyShutdown ) { SetErrorMessage( "Please run esentutl.exe to recover or repair the database." ); }
+		else if ( g_err == JET_errDatabaseInvalidPath || g_err == JET_errDiskIO || g_err == JET_errInvalidPath || g_err == JET_errInvalidSystemPath ) { SetErrorMessage( "The database could not be loaded from its current location.\r\n\r\nTry moving the database into the root directory and ensure that there are no Unicode characters in the path." ); }
+		else if ( g_err == JET_errReadVerifyFailure ) { SetErrorMessage( "The Microsoft Jet database engine may not be supported for this version of database.\r\n\r\nPlease run the program with esent.dll from Windows Vista or higher." ); }	// I see this with XP esent.dll.
 		goto CLEANUP;
 	}
 
 	if ( ( g_err = JetOpenDatabase( g_sesid, g_ascii_filepath, NULL, &g_dbid, JET_bitDbReadOnly ) ) != JET_errSuccess )
 	{
 		g_error_state = 1;	// Don't close database.
-		goto CLEANUP;
+		//goto CLEANUP;
 	}
 
 CLEANUP:
 
-	free( partial_header );
-
 	return g_err;
 }
 
-// *ptableid is closed in cleanup_esedb_info().
-JET_ERR open_table( JET_PCSTR szTableName, JET_TABLEID *ptableid )
+// *ptableid is closed in CleanupESEDBInfo().
+JET_ERR OpenTable( JET_PCSTR szTableName, JET_TABLEID *ptableid )
 {
 	if ( ( g_err = JetOpenTable( g_sesid, g_dbid, szTableName, NULL, 0, JET_bitTableReadOnly, ptableid ) ) != JET_errSuccess )
 	{
@@ -633,7 +602,7 @@ JET_ERR open_table( JET_PCSTR szTableName, JET_TABLEID *ptableid )
 	return g_err;
 }
 
-JET_ERR get_table_column_info( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef )
+JET_ERR GetTableColumnInfo( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef )
 {
 	if ( ( g_err = JetGetTableColumnInfo( g_sesid, tableid, szColumnName, pcolumndef, sizeof( *pcolumndef ), JET_ColInfo ) ) != JET_errSuccess )
 	{
@@ -644,7 +613,7 @@ JET_ERR get_table_column_info( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_
 }
 
 // Convert the Windows Property to its column name. (Replace '_' with '.')
-char *get_column_name( wchar_t *name, unsigned long name_length )
+char *GetColumnName( wchar_t *name, unsigned long name_length )
 {
 	char *column_name = NULL;
 	wchar_t *t_cn = NULL;
@@ -669,30 +638,30 @@ char *get_column_name( wchar_t *name, unsigned long name_length )
 }
 
 // tableid_0A and tableid_0P will be opened on success.
-// g_ci is freed in cleanup_esedb_info().
+// g_ci is freed in CleanupESEDBInfo().
 // Handles Windows Vista and Windows 7 databases.
 // The Windows Property values are stored in SystemIndex_0A and the list of columns is stored in SystemIndex_0P.
 // We could use MSysObjects to get the list of columns, but SystemIndex_0A contains compression and data type information.
-// In the MSysObjects table, columns with a flag mask of 0x80 or 0x10 (not sure which) causes JetRetrieveColumns in update_scan_info(...) to fail. They aren't listed in SystemIndex_0P.
-JET_ERR get_column_info()
+// In the MSysObjects table, columns with a flag mask of 0x80 or 0x10 (not sure which) causes JetRetrieveColumns in UpdateFileinfo(...) to fail. They aren't listed in SystemIndex_0P.
+JET_ERR GetColumnInfo()
 {
-	long type = 0;
+	VARENUM type = VT_EMPTY;
 	unsigned char jet_compress = 0;
 	JET_COLUMNDEF name_column = { 0 }, type_column = { 0 }, jet_compress_column = { 0 }, system_index_0a_column = { 0 };
 
 	JET_RETRIEVECOLUMN rc_0P[ 3 ] = { 0 };
 
-	column_info *ci = NULL;
-	column_info *last_ci = NULL;
+	COLUMN_INFO *ci = NULL;
+	COLUMN_INFO *last_ci = NULL;
 
 	g_column_count = 0;
 
 	// This table has a list of Windows Properties and various information about the columns we'll be retrieving.
-	if ( ( g_err = open_table( "SystemIndex_0P", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = OpenTable( "SystemIndex_0P", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "JetCompress", &jet_compress_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "JetCompress", &jet_compress_column ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// Ensure that the values we retrieve are of the correct size.
 	if ( type_column.cbMax != sizeof( long ) ||
@@ -716,7 +685,7 @@ JET_ERR get_column_info()
 	rc_0P[ 2 ].itagSequence = 1;
 
 	// This table has all of the Windows Properties and their values.
-	if ( ( g_err = open_table( "SystemIndex_0A", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = OpenTable( "SystemIndex_0A", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// Get the DocID table since it isn't listed in SystemIndex_0P.
 	if ( JetGetTableColumnInfo( g_sesid, g_tableid_0A, "DocID", &system_index_0a_column, sizeof( system_index_0a_column ), JET_ColInfo ) == JET_errSuccess )
@@ -725,7 +694,7 @@ JET_ERR get_column_info()
 
 		++g_column_count;
 
-		ci = ( column_info * )malloc( sizeof( column_info ) );
+		ci = ( COLUMN_INFO * )malloc( sizeof( COLUMN_INFO ) );
 		ci->Name = _wcsdup( L"DocID" );
 		ci->Name_byte_length = 10;
 		ci->column_id = system_index_0a_column.columnid;
@@ -770,7 +739,7 @@ JET_ERR get_column_info()
 
 		++g_column_count;
 
-		ci = ( column_info * )malloc( sizeof( column_info ) );
+		ci = ( COLUMN_INFO * )malloc( sizeof( COLUMN_INFO ) );
 		ci->Name = ( wchar_t * )name;
 		ci->Name_byte_length = rc_0P[ 0 ].cbActual;
 		ci->Type = type;
@@ -780,7 +749,7 @@ JET_ERR get_column_info()
 		ci->next = NULL;
 
 		memset( &system_index_0a_column, 0, sizeof( system_index_0a_column ) );
-		char *column_name = get_column_name( ci->Name, ci->Name_byte_length );	// Converts the column name into a char string and replaces all '.' with '_'.
+		char *column_name = GetColumnName( ci->Name, ci->Name_byte_length );	// Converts the column name into a char string and replaces all '.' with '_'.
 		JetGetTableColumnInfo( g_sesid, g_tableid_0A, column_name, &system_index_0a_column, sizeof( system_index_0a_column ), JET_ColInfo );
 		free( column_name );
 
@@ -829,11 +798,11 @@ CLEANUP:
 }
 
 // tableid_0A and tableid_0P will be opened on success.
-// g_ci is freed in cleanup_esedb_info().
+// g_ci is freed in CleanupESEDBInfo().
 // Handles Windows 8+ databases.
 // The Windows Property values are stored in SystemIndex_PropertyStore and the list of columns is stored in MSysObjects.
 // The values are in little endian and don't appear to be compressed. There is no data type associated with the values.
-JET_ERR get_column_info_win8()
+JET_ERR GetColumnInfoWin8()
 {
 	short type = 0;
 	long objid = 0, t_objid = 0;
@@ -845,17 +814,17 @@ JET_ERR get_column_info_win8()
 
 	bool found_index = false;
 
-	column_info *ci = NULL;
-	column_info *last_ci = NULL;
+	COLUMN_INFO *ci = NULL;
+	COLUMN_INFO *last_ci = NULL;
 
 	g_column_count = 0;
 
 	// This table has a list of Windows Properties and various information about the columns we'll be retrieving.
-	if ( ( g_err = open_table( "MSysObjects", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = OpenTable( "MSysObjects", &g_tableid_0P ) ) != JET_errSuccess ) { goto CLEANUP; }
 
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
-	if ( ( g_err = get_table_column_info( g_tableid_0P, "ObjidTable", &objid_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "Name", &name_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "Type", &type_column ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = GetTableColumnInfo( g_tableid_0P, "ObjidTable", &objid_column ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// Ensure that the values we retrieve are of the correct size.
 	if ( type_column.cbMax != sizeof( short ) ||
@@ -926,7 +895,7 @@ JET_ERR get_column_info_win8()
 	if ( found_index )
 	{
 		// This table has all of the Windows Properties and their values.
-		if ( ( g_err = open_table( "SystemIndex_PropertyStore", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
+		if ( ( g_err = OpenTable( "SystemIndex_PropertyStore", &g_tableid_0A ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 		if ( ( g_err = JetMove( g_sesid, g_tableid_0P, JET_MoveFirst, JET_bitNil ) ) != JET_errSuccess ) { goto CLEANUP; }
 
@@ -971,9 +940,10 @@ JET_ERR get_column_info_win8()
 				wchar_t *val = ( wchar_t * )malloc( sizeof( wchar_t ) * val_length );
 				MultiByteToWideChar( CP_UTF8, 0, prop_name, -1, val, val_length );
 
-				ci = ( column_info * )malloc( sizeof( column_info ) );
+				ci = ( COLUMN_INFO * )malloc( sizeof( COLUMN_INFO ) );
 				ci->Name = val;
 				ci->Name_byte_length = ( val_length - 1 ) * sizeof( wchar_t );
+				ci->Type = VT_EMPTY;
 				ci->JetCompress = false;
 				ci->data = NULL;
 				ci->sei = NULL;
@@ -1021,7 +991,7 @@ JET_ERR get_column_info_win8()
 				}
 				else if ( ci->Name_byte_length == 46 && wcscmp( ci->Name, L"System_ThumbnailCacheId" ) == 0 )
 				{
-					ci->Type = 0;	// Reset the data type.
+					ci->Type = VT_EMPTY;	// Reset the data type.
 					g_thumbnail_cache_id = ci;
 				}
 				else if ( ( ci->Name_byte_length == 22 && wcscmp( ci->Name, L"System_Size" ) == 0 ) ||
@@ -1029,7 +999,7 @@ JET_ERR get_column_info_win8()
 						  ( ci->Name_byte_length == 64 && wcscmp( ci->Name, L"System_Document_TotalEditingTime" ) == 0 ) ||
 						  ( ci->Name_byte_length == 28 && wcscmp( ci->Name, L"System_FileFRN" ) == 0 ) )
 				{
-					ci->Type = 0;	// Reset the data type.
+					ci->Type = VT_EMPTY;	// Reset the data type.
 				}
 			}
 
@@ -1050,15 +1020,15 @@ CLEANUP:
 }
 
 // Build the retrieve column array's values from the columns list.
-// g_rc_array is freed in cleanup_esedb_info().
-void build_retrieve_column_array()
+// g_rc_array is freed in CleanupESEDBInfo().
+void BuildRetrieveColumnArray()
 {
 	if ( g_ci == NULL || g_column_count == 0 )
 	{
 		return;
 	}
 
-	column_info *t_ci = g_ci;
+	COLUMN_INFO *t_ci = g_ci;
 
 	g_rc_array = ( JET_RETRIEVECOLUMN * )malloc( sizeof( JET_RETRIEVECOLUMN ) * g_column_count );
 	memset( g_rc_array, 0, sizeof( JET_RETRIEVECOLUMN ) * g_column_count );

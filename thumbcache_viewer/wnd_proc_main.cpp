@@ -62,13 +62,13 @@ RECT last_dim = { 0 };				// Keeps track of the image window's dimension before 
 HCURSOR wait_cursor = NULL;			// Temporary cursor while processing entries.
 
 // Image variables
-fileinfo *current_fileinfo = NULL;	// Holds information about the currently selected image. Gets deleted in WM_DESTROY.
+FILE_INFO *current_file_info = NULL;	// Holds information about the currently selected image. Gets deleted in WM_DESTROY.
 Gdiplus::Image *gdi_image = NULL;	// GDI+ image object. We need it to handle .png and .jpg images.
 
 int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
-	fileinfo *fi1 = ( ( fileinfo * )lParam1 );
-	fileinfo *fi2 = ( ( fileinfo * )lParam2 );
+	FILE_INFO *fi1 = ( ( FILE_INFO * )lParam1 );
+	FILE_INFO *fi2 = ( ( FILE_INFO * )lParam2 );
 
 	unsigned char index = 0;
 
@@ -82,8 +82,8 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 	{
 		index = ( unsigned char )lParamSort;
 
-		fi1 = ( ( fileinfo * )lParam2 );
-		fi2 = ( ( fileinfo * )lParam1 );
+		fi1 = ( ( FILE_INFO * )lParam2 );
+		fi2 = ( ( FILE_INFO * )lParam1 );
 	}
 		
 	switch ( index )
@@ -493,7 +493,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				{
 					case MENU_OPEN:
 					{
-						pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+						PATH_INFO *pi = ( PATH_INFO * )malloc( sizeof( PATH_INFO ) );
 						pi->filepath = ( wchar_t * )malloc( sizeof( wchar_t ) * MAX_PATH * MAX_PATH );
 						wmemset( pi->filepath, 0, MAX_PATH * MAX_PATH );
 						OPENFILENAME ofn = { NULL };
@@ -561,7 +561,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							SHGetPathFromIDList( lpiidl, save_directory );
 							CoTaskMemFree( lpiidl );
 
-							save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );	// Freed in the save_items thread.
+							SAVE_INFO *save_type = ( SAVE_INFO * )malloc( sizeof( SAVE_INFO ) );	// Freed in the save_items thread.
 							save_type->type = 0;	// Save files to filepath. The directory should exist so no need to build it.
 							save_type->save_all = ( LOWORD( wParam ) == MENU_SAVE_ALL ? true : false );
 							save_type->filepath = save_directory;
@@ -706,7 +706,13 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.8\r\n\r\nCopyright \xA9 2011-2023 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.9 ("
+#ifdef _WIN64
+										   "64"
+#else
+										   "32"
+#endif
+										   "-bit)\r\n\r\nCopyright \xA9 2011-2023 Eric Kutcher", PROGRAM_CAPTION_A, MB_APPLMODAL | MB_ICONINFORMATION );
 					}
 					break;
 
@@ -987,7 +993,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.iItem = nmlv->iItem;
 					SendMessage( nmlv->hdr.hwndFrom, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-					fileinfo *fi = ( fileinfo * )lvi.lParam;
+					FILE_INFO *fi = ( FILE_INFO * )lvi.lParam;
 					if ( fi == NULL || ( fi != NULL && fi->si == NULL ) )
 					{
 						break;
@@ -1109,9 +1115,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.mask = LVIF_PARAM;
 					SendMessage( pdi->hdr.hwndFrom, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-					// Save our current fileinfo.
-					current_fileinfo = ( fileinfo * )lvi.lParam;
-					if ( current_fileinfo == NULL )
+					// Save our current file info.
+					current_file_info = ( FILE_INFO * )lvi.lParam;
+					if ( current_file_info == NULL )
 					{
 						return TRUE;
 					}
@@ -1129,11 +1135,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					SetWindowLongPtr( g_hWnd_edit, GWLP_WNDPROC, ( LONG_PTR )EditSubProc );
 
 					// Set our edit control's text to the list item's text.
-					SetWindowText( g_hWnd_edit, current_fileinfo->filename );
+					SetWindowText( g_hWnd_edit, current_file_info->filename );
 
 					// Get the length of the filename without the extension.
-					int ext_len = ( int )wcslen( current_fileinfo->filename );
-					while ( ext_len != 0 && current_fileinfo->filename[ --ext_len ] != L'.' );
+					int ext_len = ( int )wcslen( current_file_info->filename );
+					while ( ext_len != 0 && current_file_info->filename[ --ext_len ] != L'.' );
 
 					// Select all the text except the file extension (if ext_len = 0, then everything is selected)
 					SendMessage( g_hWnd_edit, EM_SETSEL, 0, ext_len );
@@ -1160,14 +1166,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					}
 
 					// Free the old filename.
-					free( current_fileinfo->filename );
+					free( current_file_info->filename );
 					// Create a new filename based on the editbox's text.
 					wchar_t *filename = ( wchar_t * )malloc( sizeof( wchar_t ) * ( length + 1 ) );
 					wmemset( filename, 0, length + 1 );
 					wcscpy_s( filename, length + 1, pdi->item.pszText );
 
-					// Modify our listview item's fileinfo lParam value.
-					current_fileinfo->filename = filename;
+					// Modify our listview item's file info lParam value.
+					current_file_info->filename = filename;
 
 					// Set the image window's new title.
 					wchar_t new_title[ MAX_PATH + 30 ] = { 0 };
@@ -1190,7 +1196,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// The item we want to draw is our listview.
 			if ( dis->CtlType == ODT_LISTVIEW && dis->itemData != NULL )
 			{
-				fileinfo *fi = ( fileinfo * )dis->itemData;
+				FILE_INFO *fi = ( FILE_INFO * )dis->itemData;
 				if ( fi->si == NULL )
 				{
 					return TRUE;
@@ -1522,14 +1528,14 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			LVITEM lvi = { NULL };
 			lvi.mask = LVIF_PARAM;
 
-			fileinfo *fi = NULL;
+			FILE_INFO *fi = NULL;
 
-			// Go through each item, and free their lParam values. current_fileinfo will get deleted here.
+			// Go through each item, and free their lParam values. current_file_info will get deleted here.
 			for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
 			{
 				SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
 
-				fi = ( fileinfo * )lvi.lParam;
+				fi = ( FILE_INFO * )lvi.lParam;
 				if ( fi != NULL )
 				{
 					if ( fi->si != NULL )
@@ -1543,11 +1549,11 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						}
 					}
 
-					cleanup_extended_info( fi->ei );
+					CleanupExtendedInfo( fi->ei );
 
 					// First free the filename pointer.
 					free( fi->filename );
-					// Then free the fileinfo structure.
+					// Then free the FILE_INFO structure.
 					free( fi );
 				}
 			}
@@ -1558,7 +1564,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 				delete gdi_image;
 			}
 
-			cleanup_blank_entries();
+			CleanupBlankEntries();
 
 			// Since these aren't owned by a window, we need to destroy them.
 			DestroyMenu( g_hMenuSub_context );
@@ -1586,7 +1592,7 @@ LRESULT CALLBACK ListViewSubProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 		{
 			int count = DragQueryFile( ( HDROP )wParam, ( UINT )-1, NULL, 0 );
 
-			pathinfo *pi = ( pathinfo * )malloc( sizeof( pathinfo ) );
+			PATH_INFO *pi = ( PATH_INFO * )malloc( sizeof( PATH_INFO ) );
 			pi->type = 0;
 			pi->filepath = NULL;
 			pi->offset = 0;

@@ -1,19 +1,19 @@
 /*
-    thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
-    Copyright (C) 2011-2023 Eric Kutcher
+	thumbcache_viewer_cmd will extract thumbnail images from thumbcache database files.
+	Copyright (C) 2011-2023 Eric Kutcher
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define STRICT
@@ -24,7 +24,13 @@
 #include <stdlib.h>
 #include <wchar.h>
 
+#include "lite_mssrch.h"
+#include "lite_msscb.h"
+#include "lite_sqlite3.h"
+
+#include "map_entries.h"
 #include "read_esedb.h"
+#include "read_sqlitedb.h"
 
 // Magic identifiers for various image formats.
 #define FILE_TYPE_BMP	"BM"
@@ -178,7 +184,13 @@ int wmain( int argc, wchar_t *argv[] )
 	wchar_t edbname[ MAX_PATH ] = { 0 };
 	wchar_t output_path[ MAX_PATH ] = { 0 };
 
-	printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.2.0\nCopyright (c) 2011-2023 Eric Kutcher\n\n" );
+	printf( "Thumbcache Viewer CMD is made free under the GPLv3 license.\nVersion 1.0.2.1 ("
+#ifdef _WIN64
+			"64"
+#else
+			"32"
+#endif
+			"-bit)\nCopyright (c) 2011-2023 Eric Kutcher\n\n" );
 
 	if ( argc == 1 )
 	{
@@ -186,7 +198,7 @@ int wmain( int argc, wchar_t *argv[] )
 		fgetws( name, MAX_PATH, stdin );
 
 		// Remove the newline character if it was appended.
-		int input_length = wcslen( name );
+		int input_length = ( int )wcslen( name );
 		if ( name[ input_length - 1 ] == L'\n' )
 		{
 			name[ input_length - 1 ] = L'\0';
@@ -211,7 +223,7 @@ int wmain( int argc, wchar_t *argv[] )
 		fgetws( edbname, MAX_PATH, stdin );
 
 		// Remove the newline character if it was appended.
-		input_length = wcslen( edbname );
+		input_length = ( int )wcslen( edbname );
 		if ( edbname[ input_length - 1 ] == L'\n' )
 		{
 			edbname[ input_length - 1 ] = L'\0';
@@ -256,7 +268,7 @@ int wmain( int argc, wchar_t *argv[] )
 			fgetws( output_path, MAX_PATH, stdin );
 
 			// Remove the newline character if it was appended.
-			input_length = wcslen( output_path );
+			input_length = ( int )wcslen( output_path );
 			if ( output_path[ input_length - 1 ] == L'\n' )
 			{
 				output_path[ input_length - 1 ] = L'\0';
@@ -309,7 +321,7 @@ int wmain( int argc, wchar_t *argv[] )
 						{
 							++arg;	// Move to the supplied value.
 
-							int length = wcslen( argv[ arg ] );
+							int length = ( int )wcslen( argv[ arg ] );
 							wmemcpy_s( output_path, MAX_PATH, argv[ arg ], ( length > MAX_PATH ? MAX_PATH : length ) );
 						}
 					}
@@ -322,7 +334,7 @@ int wmain( int argc, wchar_t *argv[] )
 						{
 							++arg;	// Move to the supplied value.
 
-							int length = wcslen( argv[ arg ] );
+							int length = ( int )wcslen( argv[ arg ] );
 							wmemcpy_s( edbname, MAX_PATH, argv[ arg ], ( length > MAX_PATH ? MAX_PATH : length ) );
 						}
 					}
@@ -351,7 +363,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 							++arg;	// Move to the supplied value.
 
-							int length = wcslen( argv[ arg ] );
+							int length = ( int )wcslen( argv[ arg ] );
 							if ( length > 0 )
 							{
 								if ( *cl_val == NULL )
@@ -402,7 +414,7 @@ int wmain( int argc, wchar_t *argv[] )
 	if ( edbname[ 0 ] != L'\0' )
 	{
 		wprintf( L"Attempting to open the Windows Search database: %s\n", edbname );
-		load_esedb_info( edbname );
+		TraverseDatabase( edbname );
 		printf( "\n" );
 	}
 
@@ -435,7 +447,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 		if ( directory != NULL && *directory != NULL )
 		{
-			directory_length = wcslen( directory );
+			directory_length = ( int )wcslen( directory );
 
 			wmemcpy_s( name, MAX_PATH, directory, directory_length );
 			wmemcpy_s( name + directory_length, MAX_PATH - directory_length, L"\\*\0", 3 );
@@ -447,7 +459,7 @@ int wmain( int argc, wchar_t *argv[] )
 		}
 		else if ( file_path != NULL && *file_path != NULL )
 		{
-			file_path_length = wcslen( file_path );
+			file_path_length = ( int )wcslen( file_path );
 
 			wmemcpy_s( name, MAX_PATH, file_path, file_path_length );
 			name[ file_path_length ] = 0;	// Sanity.
@@ -469,7 +481,7 @@ int wmain( int argc, wchar_t *argv[] )
 					int extension_offset = 0;
 					int file_name_length = 0;
 
-					file_name_length = extension_offset = wcslen( FindFileData.cFileName );
+					file_name_length = extension_offset = ( int )wcslen( FindFileData.cFileName );
 
 					// Find the start of the file extension.
 					while ( extension_offset != 0 && FindFileData.cFileName[ --extension_offset ] != L'.' );
@@ -1361,7 +1373,7 @@ int wmain( int argc, wchar_t *argv[] )
 
 					if ( !skip_blank || ( skip_blank && data_size > 0 ) )
 					{
-						map_esedb_hash( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ), output_html, hFile_html );
+						MapHash( ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->entry_hash : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->entry_hash : ( ( database_cache_entry_8 * )database_cache_entry )->entry_hash ) ), output_html, hFile_html );
 					}
 
 					// Output the data with the given (UTF-16) filename.
@@ -1468,11 +1480,20 @@ int wmain( int argc, wchar_t *argv[] )
 		FindClose( hFind );	// Close the find file handle.
 	}
 
-	// Cleanup and reset all values associated with processing the ese database.
-	cleanup_esedb_info();
-
 	free( file_path_list );
 	free( directory_path_list );
+
+	// Clean up the database we opened.
+	CleanupESEDBInfo();
+	if ( sqlite3_state != SQLITE3_STATE_SHUTDOWN )
+	{
+		CleanupSQLiteInfo();
+	}
+
+	// Unload the modules if they were initialized.
+	UnInitializeMsSCB();
+	UnInitializeMsSrch();
+	UnInitializeSQLite3();
 
 	return 0;
 }

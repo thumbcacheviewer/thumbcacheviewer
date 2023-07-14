@@ -19,7 +19,7 @@
 #ifndef MAP_ENTRIES_H
 #define MAP_ENTRIES_H
 
-unsigned __stdcall map_entries( void *pArguments );
+unsigned __stdcall MapEntries( void *pArguments );
 
 extern wchar_t g_filepath[];					// Path to the files and folders to scan.
 extern wchar_t g_extension_filter[];			// A list of extensions to filter from a file scan.

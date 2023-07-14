@@ -154,10 +154,10 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 					{
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
-						ofn.lpstrFilter = L"ESE Database Files (*.edb)\0*.edb\0All Files (*.*)\0*.*\0";
+						ofn.lpstrFilter = L"Windows Search Database Files (*.edb;*.db)\0*.edb;*.db\0All Files (*.*)\0*.*\0";
 						ofn.lpstrFile = scan_directory;
 						ofn.nMaxFile = MAX_PATH;
-						ofn.lpstrTitle = L"Open an Extensible Storage Engine Database file";
+						ofn.lpstrTitle = L"Open a Windows Search database file";
 						ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_READONLY;
 						ofn.hwndOwner = hWnd;
 
@@ -233,7 +233,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			ti.lParam = ( LPARAM )0;
 			SendMessageA( g_hWnd_tab, TCM_INSERTITEMA, 0, ( LPARAM )&ti );	// Insert a new tab at the end.
 
-			ti.pszText = "Load ESE Database";
+			ti.pszText = "Load Windows Search Database";
 			ti.lParam = ( LPARAM )1;
 			SendMessageA( g_hWnd_tab, TCM_INSERTITEMA, 1, ( LPARAM )&ti );	// Insert a new tab at the end.
 
@@ -338,7 +338,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							scan_type = tab_index;	// scan_type will allow the correct windows to update regardless of the selected tab.
 
 							// If use_scanner == false, then read the ese database.
-							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &map_entries, ( void * )scan_type, 0, NULL ) );
+							CloseHandle( ( HANDLE )_beginthreadex( NULL, 0, &MapEntries, ( void * )scan_type, 0, NULL ) );
 						}
 						else
 						{
@@ -431,7 +431,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					int index = ( int )SendMessage( nmhdr->hwndFrom, TCM_GETCURSEL, 0, 0 );		// Get the selected tab
 					if ( index == 0 || index == 1 )
 					{
-						SendMessageA( g_hWnd_static1, WM_SETTEXT, 0, ( LPARAM )( index == 0 ? "Initial scan directory:" : "Extensible Storage Engine Database file:" ) );
+						SendMessageA( g_hWnd_static1, WM_SETTEXT, 0, ( LPARAM )( index == 0 ? "Initial scan directory:" : "Windows Search database file:" ) );
 
 						ShowWindow( g_hWnd_path[ index ], SW_SHOW );
 						ShowWindow( g_hWnd_extensions[ index ], SW_SHOW );

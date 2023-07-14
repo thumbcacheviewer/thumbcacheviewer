@@ -73,7 +73,7 @@ LRESULT CALLBACK PropertyWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 			SendMessage( g_hWnd_edit_property_value, WM_SETTEXT, 0, 0 );
 			if ( lParam != NULL )
 			{
-				extended_info *ei = ( extended_info * )lParam;
+				EXTENDED_INFO *ei = ( EXTENDED_INFO * )lParam;
 
 				SendMessage( g_hWnd_edit_property_value, WM_SETTEXT, 0, ( LPARAM )ei->property_value );
 				SetWindowText( hWnd, ( ei->sei != NULL ? ei->sei->windows_property : L"Property Value" ) );

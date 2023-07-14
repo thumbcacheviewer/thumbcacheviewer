@@ -19,10 +19,13 @@
 #include "map_entries.h"
 #include "globals.h"
 #include "utilities.h"
-#include "read_esedb.h"
 
 #include "lite_mssrch.h"
 #include "lite_msscb.h"
+#include "lite_sqlite3.h"
+
+#include "read_esedb.h"
+#include "read_sqlitedb.h"
 
 #include <stdio.h>
 
@@ -39,8 +42,8 @@ bool is_win_7_or_higher = true;						// Windows Vista uses a different file hash
 bool is_win_8_1_or_higher = true;					// Windows 8.1 uses a different file hashing algorithm.
 
 CLSID clsid;										// Holds a drive's Volume GUID.
-unsigned int file_count = 0;						// Number of files scanned.
-unsigned int match_count = 0;						// Number of files that match an entry hash.
+unsigned int g_file_count = 0;						// Number of files scanned.
+unsigned int g_match_count = 0;						// Number of files that match an entry hash.
 
 #define _WIN32_WINNT_WIN7		0x0601
 //#define _WIN32_WINNT_WIN8		0x0602
@@ -78,14 +81,30 @@ BOOL IsWindows8Point1OrGreater()
 	return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINBLUE ), LOBYTE( _WIN32_WINNT_WINBLUE ), 0 );
 }
 
-void update_scan_info( unsigned long long hash, wchar_t *filepath )
+void UpdateWindowInfo( unsigned long long hash, wchar_t *filepath )
 {
-	// Now that we have a hash value to compare, search our fileinfo tree for the same value.
-	linked_list *ll = ( linked_list * )dllrbt_find( fileinfo_tree, ( void * )hash, true );
+	++g_file_count; 
+
+	// Update our scan window with new scan information.
+	if ( g_show_details )
+	{
+		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
+		char buf[ 17 ] = { 0 };
+		sprintf_s( buf, 17, "%016llx", hash );
+		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 4, ( LPARAM )buf );
+		sprintf_s( buf, 17, "%lu", g_file_count );
+		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )buf );
+	}
+}
+
+void UpdateFileinfo( unsigned long long hash, wchar_t *filepath )
+{
+	// Now that we have a hash value to compare, search our file info tree for the same value.
+	LINKED_LIST *ll = ( LINKED_LIST * )dllrbt_find( g_file_info_tree, ( void * )hash, true );
 
 	// Retrieve the column information once so we don't have to call this for duplicate entries in the loop below.
 	bool got_columns = false;
-	extended_info *ei = NULL;
+	EXTENDED_INFO *ei = NULL;
 	if ( g_retrieve_extended_information )
 	{
 		if ( ll != NULL && ll->fi != NULL )
@@ -110,29 +129,30 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 	{
 		if ( ll->fi != NULL )
 		{
-			++match_count;
+			++g_match_count;
 
 			// Replace the hash filename with the local filename.
-			free( ll->fi->filename );
+			wchar_t *del_filename = ll->fi->filename;
 			ll->fi->filename = _wcsdup( filepath );
+			free( del_filename );
 
 			if ( got_columns )
 			{
 				// Convert the record values to strings so we can print them out.
-				convert_values( &( ll->fi->ei ) );
+				ConvertValues( &( ll->fi->ei ) );
 			}
 			else if ( ll->fi->ei == NULL )
 			{
-				// If we have extended information, but didn't retrieve any columns, then copy it to our fileinfo linked list nodes.
-				extended_info *l_ei = NULL;
-				extended_info *t_ei = ei;
+				// If we have extended information, but didn't retrieve any columns, then copy it to our file info linked list nodes.
+				EXTENDED_INFO *l_ei = NULL;
+				EXTENDED_INFO *t_ei = ei;
 				while ( t_ei != NULL )
 				{
 					if ( t_ei->sei != NULL )
 					{
 						++( t_ei->sei->count );
 
-						extended_info *c_ei = ( extended_info * )malloc( sizeof( extended_info ) );
+						EXTENDED_INFO *c_ei = ( EXTENDED_INFO * )malloc( sizeof( EXTENDED_INFO ) );
 						c_ei->sei = t_ei->sei;
 						c_ei->property_value = _wcsdup( t_ei->property_value );
 						c_ei->next = NULL;
@@ -156,22 +176,9 @@ void update_scan_info( unsigned long long hash, wchar_t *filepath )
 
 		ll = ll->next;
 	}
-
-	++file_count; 
-
-	// Update our scan window with new scan information.
-	if ( g_show_details )
-	{
-		SendMessage( g_hWnd_scan, WM_PROPAGATE, 3, ( LPARAM )filepath );
-		char buf[ 17 ] = { 0 };
-		sprintf_s( buf, 17, "%016llx", hash );
-		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 4, ( LPARAM )buf );
-		sprintf_s( buf, 17, "%lu", file_count );
-		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )buf );
-	}
 }
 
-unsigned long long hash_data( char *data, unsigned long long hash, short length )
+unsigned long long HashData( char *data, unsigned long long hash, short length )
 {
 	while ( length-- > 0 )
 	{
@@ -181,7 +188,7 @@ unsigned long long hash_data( char *data, unsigned long long hash, short length 
 	return hash;
 }
 
-void hash_file( wchar_t *filepath, wchar_t *extension )
+void HashFile( wchar_t *filepath, wchar_t *extension )
 {
 	// Initial hash value. This value was found in shell32.dll.
 	unsigned long long hash = 0x95E729BA2C37FD21;
@@ -190,7 +197,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 	if ( hFile != INVALID_HANDLE_VALUE )
 	{
 		// Hash Volume GUID
-		hash = hash_data( ( char * )&clsid, hash, sizeof( CLSID ) );
+		hash = HashData( ( char * )&clsid, hash, sizeof( CLSID ) );
 
 		// Hash File ID - found in the Master File Table.
 		BY_HANDLE_FILE_INFORMATION bhfi;
@@ -199,13 +206,13 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 		unsigned long long file_id = bhfi.nFileIndexHigh;
 		file_id = ( file_id << 32 ) | bhfi.nFileIndexLow;
 
-		hash = hash_data( ( char * )&file_id, hash, sizeof( unsigned long long ) );
+		hash = HashData( ( char * )&file_id, hash, sizeof( unsigned long long ) );
 
 		// Windows Vista doesn't hash the file extension or modified DOS time.
 		if ( is_win_7_or_higher )
 		{
 			// Hash Wide Character File Extension
-			hash = hash_data( ( char * )extension, hash, ( short )( wcslen( extension ) * sizeof( wchar_t ) ) );
+			hash = HashData( ( char * )extension, hash, ( short )( wcslen( extension ) * sizeof( wchar_t ) ) );
 
 			// Hash Last Modified DOS Time
 			unsigned short fat_date;
@@ -214,7 +221,7 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 			unsigned int dos_time = fat_date;
 			dos_time = ( dos_time << 16 ) | fat_time;
 
-			hash = hash_data( ( char * )&dos_time, hash, sizeof( unsigned int ) );
+			hash = HashData( ( char * )&dos_time, hash, sizeof( unsigned int ) );
 
 			// Windows 8.1 calculates the precision loss between the converted write time and original write time.
 			if ( is_win_8_1_or_higher )
@@ -229,16 +236,17 @@ void hash_file( wchar_t *filepath, wchar_t *extension )
 				// Hash if there's any precision loss.
 				if ( precision_loss != 0 )
 				{
-					hash = hash_data( ( char * )&precision_loss, hash, sizeof( unsigned int ) );
+					hash = HashData( ( char * )&precision_loss, hash, sizeof( unsigned int ) );
 				}
 			}
 		}
 
-		update_scan_info( hash, filepath );
+		UpdateFileinfo( hash, filepath );
+		UpdateWindowInfo( hash, filepath );
 	}
 }
 
-void traverse_directory( wchar_t *path )
+void TraverseDirectory( wchar_t *path )
 {
 	// We don't want to continue scanning if the user cancels the scan.
 	if ( g_kill_scan )
@@ -270,12 +278,12 @@ void traverse_directory( wchar_t *path )
 					// Move to the next directory. Limit the path length to MAX_PATH.
 					if ( swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\%.259s", path, FindFileData.cFileName ) < MAX_PATH )
 					{
-						traverse_directory( filepath );
+						TraverseDirectory( filepath );
 
 						// Only hash folders if enabled.
 						if ( g_include_folders )
 						{
-							hash_file( filepath, L"" );
+							HashFile( filepath, L"" );
 						}
 					}
 				}
@@ -283,7 +291,7 @@ void traverse_directory( wchar_t *path )
 			else
 			{
 				// See if the file's extension is in our filter. Go to the next file if it's not.
-				wchar_t *ext = get_extension_from_filename( FindFileData.cFileName, ( unsigned long )wcslen( FindFileData.cFileName ) );
+				wchar_t *ext = GetExtensionFromFilename( FindFileData.cFileName, ( unsigned long )wcslen( FindFileData.cFileName ) );
 				if ( g_extension_filter[ 0 ] != 0 )
 				{
 					// Do a case-insensitive substring search for the extension.
@@ -312,7 +320,7 @@ void traverse_directory( wchar_t *path )
 					swprintf_s( filepath, ( MAX_PATH * 2 ) + 2, L"%.259s\\%.259s", path, FindFileData.cAlternateFileName );
 				}
 
-				hash_file( filepath, ext );
+				HashFile( filepath, ext );
 			}
 		}
 		while ( FindNextFile( hFind, &FindFileData ) != 0 );	// Go to the next file.
@@ -321,11 +329,169 @@ void traverse_directory( wchar_t *path )
 	}
 }
 
+void TraverseSQLiteDatabase( wchar_t *database_filepath )
+{
+	char *sql_err_msg = NULL;
+	LVITEM lvi;
+
+	int filepath_length = WideCharToMultiByte( CP_ACP, 0, database_filepath, -1, NULL, 0, NULL, NULL );
+	char *ascii_filepath = ( char * )malloc( sizeof( char ) * filepath_length ); // Size includes the null character.
+	WideCharToMultiByte( CP_ACP, 0, database_filepath, -1, ascii_filepath, filepath_length, NULL, NULL );
+
+	int sql_rc = sqlite3_open_v2( ascii_filepath, &g_sql_db, SQLITE_OPEN_READONLY, NULL );
+	if ( sql_rc )
+	{
+		// sqlite3_errmsg16( g_sql_db );
+		SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The SQLite database could not be opened." );
+
+		goto CLEANUP;
+	}
+
+	sql_rc = sqlite3_exec( g_sql_db, "SELECT Id, UniqueKey FROM SystemIndex_1_PropertyStore_Metadata", BuildPropertyTreeCallback, NULL, &sql_err_msg );
+	if ( sql_rc != SQLITE_OK )
+	{
+		goto CLEANUP;
+	}
+
+	char query[ 512 ];
+	memcpy_s( query, 512,
+		"SELECT WorkId, Id, UniqueKey, Value, VariantType FROM SystemIndex_1_PropertyStore " \
+		"JOIN SystemIndex_1_PropertyStore_Metadata ON SystemIndex_1_PropertyStore_Metadata.Id = SystemIndex_1_PropertyStore.ColumnId " \
+		"WHERE WorkId IN ( SELECT WorkId FROM SystemIndex_1_PropertyStore WHERE Value = (X\'", 288 );
+
+	// Get the number of items in the listview.
+	int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );
+
+	memset( &lvi, 0, sizeof( LVITEM ) );
+	lvi.mask = LVIF_PARAM;
+
+	FILE_INFO *fi = NULL;
+
+	for ( lvi.iItem = 0; lvi.iItem < item_count; ++lvi.iItem )
+	{
+		// We don't want to continue scanning if the user cancels the scan.
+		if ( g_kill_scan )
+		{
+			break;
+		}
+
+		SendMessage( g_hWnd_list, LVM_GETITEM, 0, ( LPARAM )&lvi );
+
+		fi = ( FILE_INFO * )lvi.lParam;
+		if ( fi != NULL )
+		{
+			unsigned long long hash = ntohll( fi->entry_hash );
+			// Hex value must be padded.
+			// Id 438 =  14F-System_FileAttributes
+			// Id 434 = 4392-System_FileExtension
+			// Id  33 = 4447-System_ItemPathDisplay
+			sprintf_s( query + 288, 512 - 288, "%016llx\') ) AND (Id = 438 OR Id = 434 OR Id = 33)", hash );
+
+			PROPERTY_INFO_STATUS pis;
+			pis.file_attributes = 0;
+			pis.file_extension = NULL;
+			pis.item_path_display = NULL;
+
+			// Get values to filter results.
+			sql_rc = sqlite3_exec( g_sql_db, query, CheckPropertyInfoCallback, ( void * )&pis, &sql_err_msg );
+			if ( sql_rc != SQLITE_OK )
+			{
+				free( pis.file_extension );
+				free( pis.item_path_display );
+
+				break;
+			}
+
+			UpdateWindowInfo( fi->entry_hash, pis.item_path_display );
+
+			// See if the entry is a folder.
+			if ( ( pis.file_attributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 && !g_include_folders )
+			{
+				free( pis.file_extension );
+				free( pis.item_path_display );
+
+				continue;
+			}
+			else
+			{
+				// See if the file's extension is in our filter. Go to the next entry if it's not.
+				if ( pis.file_extension != NULL && g_extension_filter[ 0 ] != 0 )
+				{
+					// Do a case-insensitive substring search for the extension.
+					int ext_length = ( int )wcslen( pis.file_extension );
+					wchar_t *temp_ext = ( wchar_t * )malloc( sizeof( wchar_t ) * ( ext_length + 3 ) );
+					for ( int i = 0; i < ext_length; ++i )
+					{
+						temp_ext[ i + 1 ] = towlower( pis.file_extension[ i ] );
+					}
+					temp_ext[ 0 ] = L'|';				// Append the delimiter to the beginning of the string.
+					temp_ext[ ext_length + 1 ] = L'|';	// Append the delimiter to the end of the string.
+					temp_ext[ ext_length + 2 ] = L'\0';
+
+					if ( wcsstr( g_extension_filter, temp_ext ) == NULL )
+					{
+						free( temp_ext );
+						free( pis.file_extension );
+						free( pis.item_path_display );
+
+						continue;
+					}
+
+					free( temp_ext );
+				}
+			}
+
+			free( pis.file_extension );
+
+			if ( pis.item_path_display != NULL )
+			{
+				++g_match_count;
+
+				// Replace the hash filename with the local filename.
+				wchar_t *del_filename = fi->filename;
+				fi->filename = pis.item_path_display;
+				free( del_filename );
+
+				pis.item_path_display = NULL;
+
+				if ( g_retrieve_extended_information && fi->ei == NULL )
+				{
+					query[ 308 ] = 0; // Preform the same query, but without the last AND statement.
+
+					// Get all the values associated with the hash. fi->ei is filled out in the callback.
+					sql_rc = sqlite3_exec( g_sql_db, query, CreatePropertyInfoCallback, ( void * )fi, &sql_err_msg );
+					if ( sql_rc != SQLITE_OK )
+					{
+						break;
+					}
+				}
+			}
+
+			free( pis.item_path_display );
+		}
+	}
+
+CLEANUP:
+
+	free( ascii_filepath );
+
+	if ( sql_err_msg != NULL )
+	{
+		sprintf_s( g_error, ERROR_BUFFER_SIZE, "SQLite: %s", sql_err_msg );
+
+		SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )g_error );
+
+		sqlite3_free( sql_err_msg );
+	}
+
+	CleanupSQLiteInfo();
+}
+
 // The Microsoft Jet Database Engine seems to have a lot of annoying quirks/compatibility issues.
 // The directory scanner is a nice compliment should this function not work 100%.
 // Ideally, the database being scanned should be done with the same esent.dll that was used to create it.
 // If there are issues with the database, make a copy and use esentutl.exe to fix it.
-void traverse_ese_database()
+void TraverseESEDatabase( wchar_t *database_filepath, unsigned long revision, unsigned long page_size )
 {
 	JET_RETRIEVECOLUMN rc[ 4 ] = { 0 };
 
@@ -335,29 +501,13 @@ void traverse_ese_database()
 	unsigned long file_attributes = 0;
 
 	// Initialize the Jet database session and get column information for later retrieval. SystemIndex_0A and SystemIndex_0P will be opened on success.
-	if ( ( g_err = init_esedb_info( g_filepath ) ) != JET_errSuccess || ( g_err = ( g_revision < 0x14 ? get_column_info() : get_column_info_win8() ) ) != JET_errSuccess ) { goto CLEANUP; }
+	if ( ( g_err = InitESEDBInfo( database_filepath, revision, page_size ) ) != JET_errSuccess || ( g_err = ( g_revision < 0x14 ? GetColumnInfo() : GetColumnInfoWin8() ) ) != JET_errSuccess ) { goto CLEANUP; }
 
 	// These are set in get_column_info. Make sure they exist.
-	if ( g_thumbnail_cache_id == NULL )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The System_ThumbnailCacheId column was not found." ); }
-		goto CLEANUP;
-	}
-	else if ( g_item_path_display == NULL )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The System_ItemPathDisplay column was not found." ); }
-		goto CLEANUP;
-	}
-	else if ( g_file_attributes == NULL )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The System_FileAttributes column was not found." ); }
-		goto CLEANUP;
-	}
-	else if ( g_file_extension == NULL )
-	{
-		if ( g_err == JET_errColumnNotFound ) { set_error_message( "The System_FileExtension column was not found." ); }
-		goto CLEANUP;
-	}
+	if ( g_thumbnail_cache_id == NULL )		{ if ( g_err == JET_errColumnNotFound ) { SetErrorMessage( "The System_ThumbnailCacheId column was not found." ); } goto CLEANUP; }
+	else if ( g_item_path_display == NULL )	{ if ( g_err == JET_errColumnNotFound ) { SetErrorMessage( "The System_ItemPathDisplay column was not found." ); } goto CLEANUP; }
+	else if ( g_file_attributes == NULL )	{ if ( g_err == JET_errColumnNotFound ) { SetErrorMessage( "The System_FileAttributes column was not found." ); } goto CLEANUP; }
+	else if ( g_file_extension == NULL )	{ if ( g_err == JET_errColumnNotFound ) { SetErrorMessage( "The System_FileExtension column was not found." ); } goto CLEANUP; }
 
 	// Ensure that the values we retrieve are of the correct size.
 	if ( g_thumbnail_cache_id->max_size != sizeof( unsigned long long ) ||
@@ -410,7 +560,7 @@ void traverse_ese_database()
 	if ( g_retrieve_extended_information )
 	{
 		// Initialize g_rc_array to hold all of the record information we'll retrieve.
-		build_retrieve_column_array();
+		BuildRetrieveColumnArray();
 	}
 
 	for ( ;; )
@@ -427,17 +577,15 @@ void traverse_ese_database()
 			break;
 		}
 
+		bool set_file_info = true;
+
 		// See if the entry is a folder.
 		if ( ( file_attributes & FILE_ATTRIBUTE_DIRECTORY ) != 0 )
 		{
 			if ( !g_include_folders )
 			{
-				if ( JetMove( g_sesid, g_tableid_0A, JET_MoveNext, JET_bitNil ) != JET_errSuccess )
-				{
-					break;
-				}
-
-				continue;
+				set_file_info = false;
+				goto NEXT_ITEM;
 			}
 		}
 		else
@@ -449,7 +597,7 @@ void traverse_ese_database()
 			wchar_t *uc_file_extension = NULL;
 			if ( g_file_extension->JetCompress )
 			{
-				uc_file_extension = uncompress_value( file_extension, rc[ 2 ].cbActual );
+				uc_file_extension = UncompressValue( file_extension, rc[ 2 ].cbActual );
 			}
 
 			// See if the file's extension is in our filter. Go to the next entry if it's not.
@@ -472,13 +620,8 @@ void traverse_ese_database()
 					free( temp_ext );
 					free( uc_file_extension );
 
-					// Move to the next record (column row).
-					if ( JetMove( g_sesid, g_tableid_0A, JET_MoveNext, JET_bitNil ) != JET_errSuccess )
-					{
-						break;
-					}
-
-					continue;
+					set_file_info = false;
+					goto NEXT_ITEM;
 				}
 
 				free( temp_ext );
@@ -486,6 +629,8 @@ void traverse_ese_database()
 
 			free( uc_file_extension );
 		}
+
+NEXT_ITEM:
 
 		// Swap the byte order of the hash. For XP and 7
 		if ( g_use_big_endian )
@@ -500,10 +645,16 @@ void traverse_ese_database()
 		wchar_t *uc_item_path_display = NULL;
 		if ( g_item_path_display->JetCompress )
 		{
-			uc_item_path_display = uncompress_value( item_path_display, rc[ 1 ].cbActual );
+			uc_item_path_display = UncompressValue( item_path_display, rc[ 1 ].cbActual );
 		}
 
-		update_scan_info( thumbnail_cache_id, ( uc_item_path_display == NULL ? ( wchar_t * )item_path_display : uc_item_path_display ) );
+		wchar_t *filepath = ( uc_item_path_display == NULL ? ( wchar_t * )item_path_display : uc_item_path_display );
+
+		if ( set_file_info )
+		{
+			UpdateFileinfo( thumbnail_cache_id, filepath );
+		}
+		UpdateWindowInfo( thumbnail_cache_id, filepath );
 
 		free( uc_item_path_display );
 
@@ -520,13 +671,64 @@ CLEANUP:
 	free( file_extension );
 
 	// Process any error that occurred.
-	handle_esedb_error();
+	HandleESEDBError();
 
 	// Cleanup and reset all values associated with processing the database.
-	cleanup_esedb_info();
+	CleanupESEDBInfo();
 }
 
-unsigned __stdcall map_entries( void *pArguments )
+// Tests the file's header to figure out whether it's an ESE or SQLite database.
+void TraverseDatabase( wchar_t *database_filepath )
+{
+	HANDLE hFile = CreateFile( database_filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+	if ( hFile != INVALID_HANDLE_VALUE )
+	{
+		DWORD read = 0;
+		char partial_header[ 256 ];
+
+		BOOL ret = ReadFile( hFile, partial_header, sizeof( char ) * 256, &read, NULL );
+
+		CloseHandle( hFile );
+
+		if ( ret != FALSE && read >= 256 )
+		{
+			if ( memcmp( partial_header, "SQLite format 3\0", 16 ) == 0 )
+			{
+				if ( InitializeSQLite3() )
+				{
+					TraverseSQLiteDatabase( database_filepath );
+				}
+				else
+				{
+					SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The module sqlite3.dll failed to load.\r\n\r\nThe DLL can be downloaded from: www.sqlite.org" );
+				}
+			}
+			else if ( memcmp( partial_header + 4, "\xEF\xCD\xAB\x89", sizeof( unsigned long ) ) == 0 )	// Make sure we got enough of the header and it has the magic identifier (0x89ABCDEF) for an ESE database.
+			{
+				unsigned long revision = 0, page_size = 0;
+
+				memcpy_s( &revision, sizeof( unsigned long ), partial_header + 0xE8, sizeof( unsigned long ) );		// Revision number
+				memcpy_s( &page_size, sizeof( unsigned long ), partial_header + 0xEC, sizeof( unsigned long ) );	// Page size
+
+				TraverseESEDatabase( database_filepath, revision, page_size );
+			}
+			else
+			{
+				SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The selected file is not an ESE or SQLite database." );
+			}
+		}
+		else
+		{
+			SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The selected file could not be read or is an invalid database." );
+		}
+	}
+	else
+	{
+		SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 0, ( LPARAM )"The selected file could not be opened." );
+	}
+}
+
+unsigned __stdcall MapEntries( void *pArguments )
 {
 	// This will block every other thread from entering until the first thread is complete.
 	EnterCriticalSection( &pe_cs );
@@ -540,10 +742,10 @@ unsigned __stdcall map_entries( void *pArguments )
 	// Disable scan button, enable cancel button.
 	SendMessage( g_hWnd_scan, WM_PROPAGATE, 1, 0 );
 
-	create_fileinfo_tree();
+	CreateFileinfoTree();
 
-	file_count = 0;		// Reset the file count.
-	match_count = 0;	// Reset the match count.
+	g_file_count = 0;	// Reset the file count.
+	g_match_count = 0;	// Reset the match count.
 
 	if ( scan_type == 0 )
 	{
@@ -565,7 +767,7 @@ unsigned __stdcall map_entries( void *pArguments )
 			is_win_7_or_higher = ( IsWindows7OrGreater() != FALSE ? true : false );
 			is_win_8_1_or_higher = ( IsWindows8Point1OrGreater() != FALSE ? true : false );
 
-			traverse_directory( g_filepath );
+			TraverseDirectory( g_filepath );
 		}
 		else
 		{
@@ -574,10 +776,10 @@ unsigned __stdcall map_entries( void *pArguments )
 	}
 	else
 	{
-		traverse_ese_database();
+		TraverseDatabase( g_filepath );
 	}
 
-	cleanup_fileinfo_tree();
+	CleanupFileinfoTree();
 
 	InvalidateRect( g_hWnd_list, NULL, TRUE );
 
@@ -585,17 +787,17 @@ unsigned __stdcall map_entries( void *pArguments )
 	if ( !g_show_details )
 	{
 		char msg[ 11 ] = { 0 };
-		sprintf_s( msg, 11, "%lu", file_count );
+		sprintf_s( msg, 11, "%lu", g_file_count );
 		SendMessageA( g_hWnd_scan, WM_PROPAGATE, 5, ( LPARAM )msg );
 	}
 
 	// Reset button and text.
 	SendMessage( g_hWnd_scan, WM_PROPAGATE, 2, 0 );
 
-	if ( match_count > 0 )
+	if ( g_match_count > 0 )
 	{
 		char msg[ 30 ] = { 0 };
-		sprintf_s( msg, 30, "%d file%s mapped.", match_count, ( match_count > 1 ? "s were" : " was" ) );
+		sprintf_s( msg, 30, "%d file%s mapped.", g_match_count, ( g_match_count > 1 ? "s were" : " was" ) );
 		SendNotifyMessageA( g_hWnd_scan, WM_ALERT, 1, ( LPARAM )msg );
 	}
 	else

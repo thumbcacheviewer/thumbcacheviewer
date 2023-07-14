@@ -57,7 +57,7 @@
 #define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
 #define WM_ALERT			WM_APP + 3	// Called from threads to display a message box.
 
-// fileinfo flags.
+// file info flags.
 #define FIF_TYPE_BMP		1
 #define FIF_TYPE_JPG		2
 #define FIF_TYPE_PNG		4
@@ -68,31 +68,29 @@
 #define _WIN32_WINNT_WIN10	0x0A00
 
 // Holds shared variables among database entries.
-struct shared_info
+struct SHARED_INFO
 {
 	wchar_t dbpath[ MAX_PATH ];			// Path to the database file.
 	unsigned int system;				// 0x14 = Windows Vista, 0x15 = Windows 7, 0x1A & 0x1C = Windows 8
-
 	unsigned long count;				// Number of directory entries.
 };
 
-struct shared_extended_info
+struct SHARED_EXTENDED_INFO
 {
 	wchar_t *windows_property;
-
 	unsigned long count;				// Number of Windows properties.
 };
 
 // Information retrieved from Windows.edb.
-struct extended_info
+struct EXTENDED_INFO
 {
-	shared_extended_info *sei;		// Shared information between items.
+	SHARED_EXTENDED_INFO *sei;		// Shared information between items.
 	wchar_t *property_value;		// Converted data value.
-	extended_info *next;
+	EXTENDED_INFO *next;
 };
 
 // This structure holds information obtained as we read the database. It's passed as an lParam to our listview items.
-struct fileinfo
+struct FILE_INFO
 {
 	unsigned long long entry_hash;		// Entry hash
 	unsigned long long data_checksum;	// Data checksum
@@ -101,8 +99,8 @@ struct fileinfo
 	unsigned long long v_header_checksum;	// Verified header checksum
 	unsigned long long mapped_hash;		// Entry hash or Vista's filename integer representation.
 	wchar_t *filename;					// Name of the database entry.
-	shared_info *si;					// Shared information between items in a database.
-	extended_info *ei;					// Information retrieved from Windows.edb
+	SHARED_INFO *si;					// Shared information between items in a database.
+	EXTENDED_INFO *ei;					// Information retrieved from Windows.edb
 	unsigned int header_offset;			// Offset of header.
 	unsigned int data_offset;			// Offset of data.
 	unsigned int size;					// Size of file.
@@ -110,14 +108,14 @@ struct fileinfo
 };
 
 // Holds duplicate and blank entries.
-struct linked_list
+struct LINKED_LIST
 {
-	fileinfo *fi;						// Refer to the file info so we can add it to the listview.
-	linked_list *next;
+	FILE_INFO *fi;						// Refer to the file info so we can add it to the listview.
+	LINKED_LIST *next;
 };
 
 // Multi-file open structure.
-struct pathinfo
+struct PATH_INFO
 {
 	wchar_t *filepath;			// Path to the file/folder
 	wchar_t *output_path;		// If the user wants to save files.
@@ -126,7 +124,7 @@ struct pathinfo
 };
 
 // Save To structure.
-struct save_param
+struct SAVE_INFO
 {
 	wchar_t *filepath;		// Save directory.
 	unsigned char type;		// 0 = full path, 1 = build directory

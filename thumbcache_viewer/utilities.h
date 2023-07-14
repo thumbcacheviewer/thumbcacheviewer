@@ -41,22 +41,22 @@ unsigned __stdcall save_csv( void *pArguments );
 unsigned __stdcall save_items( void *pArguments );
 unsigned __stdcall copy_items( void *pArguments );
 
-wchar_t *get_extension_from_filename( wchar_t *filename, unsigned long length );
-wchar_t *get_filename_from_path( wchar_t *path, unsigned long length );
-wchar_t *get_file_attributes( unsigned long fa_flags );
-wchar_t *get_sfgao( unsigned long sfgao_flags );
+wchar_t *GetExtensionFromFilename( wchar_t *filename, unsigned long length );
+wchar_t *GetFilenameFromPath( wchar_t *path, unsigned long length );
+wchar_t *GetFileAttributesStr( unsigned long fa_flags );
+wchar_t *GetSFGAOStr( unsigned long sfgao_flags );
 
-void cleanup_blank_entries();
-void create_fileinfo_tree();
-void cleanup_fileinfo_tree();
-void cleanup_extended_info( extended_info *ei );
+void CleanupBlankEntries();
+void CreateFileinfoTree();
+void CleanupFileinfoTree();
+void CleanupExtendedInfo( EXTENDED_INFO *ei );
 
 void Processing_Window( bool enable );
 
-extern HANDLE shutdown_semaphore;	// Blocks shutdown while a worker thread is active.
-extern linked_list *g_be;			// A list to hold all of the blank entries.
-extern dllrbt_tree *fileinfo_tree;	// Red-black tree of fileinfo structures.
+extern HANDLE g_shutdown_semaphore;		// Blocks shutdown while a worker thread is active.
+extern LINKED_LIST *g_be;				// A list to hold all of the blank entries.
+extern dllrbt_tree *g_file_info_tree;	// Red-black tree of FILE_INFO structures.
 
-extern fileinfo *g_current_fi;		// If we removed an entry and the info window is showing, then close the info window.
+extern FILE_INFO *g_current_fi;			// If we removed an entry and the info window is showing, then close the info window.
 
 #endif

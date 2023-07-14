@@ -28,12 +28,12 @@ HWND g_hWnd_static_mapped_hash = NULL;
 HWND g_hWnd_list_info = NULL;
 HWND g_hWnd_btn_close = NULL;
 
-fileinfo *g_current_fi = NULL;
+FILE_INFO *g_current_fi = NULL;
 
 int CALLBACK InfoCompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
-	extended_info *ei1 = ( ( extended_info * )lParam1 );
-	extended_info *ei2 = ( ( extended_info * )lParam2 );
+	EXTENDED_INFO *ei1 = ( ( EXTENDED_INFO * )lParam1 );
+	EXTENDED_INFO *ei2 = ( ( EXTENDED_INFO * )lParam2 );
 
 	unsigned char index = 0;
 
@@ -47,8 +47,8 @@ int CALLBACK InfoCompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort 
 	{
 		index = ( unsigned char )lParamSort;
 
-		ei1 = ( ( extended_info * )lParam2 );
-		ei2 = ( ( extended_info * )lParam1 );
+		ei1 = ( ( EXTENDED_INFO * )lParam2 );
+		ei2 = ( ( EXTENDED_INFO * )lParam1 );
 	}
 		
 	switch ( index )
@@ -367,7 +367,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// The item we want to draw is our listview.
 			if ( dis->CtlType == ODT_LISTVIEW && dis->itemData != NULL )
 			{
-				extended_info *ei = ( extended_info * )dis->itemData;
+				EXTENDED_INFO *ei = ( EXTENDED_INFO * )dis->itemData;
 
 				// Alternate item color's background.
 				if ( dis->itemID % 2 )	// Even rows will have a light grey background.
@@ -569,7 +569,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 				if ( lParam != NULL )
 				{
-					fileinfo *fi = ( fileinfo * )lParam;
+					FILE_INFO *fi = ( FILE_INFO * )lParam;
 
 					g_current_fi = fi;
 
@@ -582,7 +582,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					lvi.mask = LVIF_PARAM;
 					lvi.iSubItem = 0;
 
-					extended_info *t_ei = fi->ei;
+					EXTENDED_INFO *t_ei = fi->ei;
 					while ( t_ei != NULL )
 					{
 						lvi.iItem = ( int )SendMessage( g_hWnd_list_info, LVM_GETITEMCOUNT, 0, 0 );

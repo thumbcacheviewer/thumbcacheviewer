@@ -72,7 +72,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 
 	Processing_Window( true );
 
-	pathinfo *pi = ( pathinfo * )pArguments;
+	PATH_INFO *pi = ( PATH_INFO * )pArguments;
 	if ( pi != NULL && pi->filepath != NULL )
 	{
 		int fname_length = 0;
@@ -122,7 +122,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 			HANDLE hFile = CreateFile( filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 			if ( hFile != INVALID_HANDLE_VALUE )
 			{
-				shared_info *si = NULL;
+				SHARED_INFO *si = NULL;
 				DWORD read = 0;
 				int item_count = ( int )SendMessage( g_hWnd_list, LVM_GETITEMCOUNT, 0, 0 );	// We don't need to call this for each item.
 
@@ -401,7 +401,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					unsigned int data_size = ( ( dh.version == WINDOWS_7 ) ? ( ( database_cache_entry_7 * )database_cache_entry )->data_size : ( ( dh.version == WINDOWS_VISTA ) ? ( ( database_cache_entry_vista * )database_cache_entry )->data_size : ( ( database_cache_entry_8 * )database_cache_entry )->data_size ) );
 
 					// Create a new info structure to send to the listview item's lParam value.
-					fileinfo *fi = ( fileinfo * )malloc( sizeof( fileinfo ) );
+					FILE_INFO *fi = ( FILE_INFO * )malloc( sizeof( FILE_INFO ) );
 					fi->flag = 0;
 					fi->ei = NULL;
 					fi->header_offset = header_offset;
@@ -482,7 +482,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					if ( si == NULL )
 					{
 						// This information is shared between entries within the database.
-						si = ( shared_info * )malloc( sizeof( shared_info ) );
+						si = ( SHARED_INFO * )malloc( sizeof( SHARED_INFO ) );
 						si->count = 0;
 						si->system = dh.version;
 						wcscpy_s( si->dbpath, MAX_PATH, filepath );
@@ -497,7 +497,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 					// Add blank entries to our blank entries linked list.
 					if ( hide_blank_entries && fi->size == 0 )
 					{
-						linked_list *be = ( linked_list * )malloc( sizeof( linked_list ) );
+						LINKED_LIST *be = ( LINKED_LIST * )malloc( sizeof( LINKED_LIST ) );
 						be->fi = fi;
 						be->next = g_be;
 
@@ -541,7 +541,7 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 		{
 			if ( pi->type == 0 )	// Save thumbnail images.
 			{
-				save_param *save_type = ( save_param * )malloc( sizeof( save_param ) );
+				SAVE_INFO *save_type = ( SAVE_INFO * )malloc( sizeof( SAVE_INFO ) );
 				save_type->type = 1;	// Build directory. It may not exist.
 				save_type->save_all = true;
 				save_type->filepath = pi->output_path;
@@ -585,9 +585,9 @@ unsigned __stdcall read_thumbcache( void *pArguments )
 	Processing_Window( false );
 
 	// Release the semaphore if we're killing the thread.
-	if ( shutdown_semaphore != NULL )
+	if ( g_shutdown_semaphore != NULL )
 	{
-		ReleaseSemaphore( shutdown_semaphore, 1, NULL );
+		ReleaseSemaphore( g_shutdown_semaphore, 1, NULL );
 	}
 
 	in_thread = false;

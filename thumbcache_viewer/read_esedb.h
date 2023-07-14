@@ -26,35 +26,40 @@
 
 #define ERROR_BUFFER_SIZE	1024
 
-struct column_info
+#define JET_coltypUnsignedLong		14
+#define JET_coltypLongLong			15
+#define JET_coltypGUID				16
+#define JET_coltypUnsignedShort		17
+
+struct COLUMN_INFO
 {
 	wchar_t *Name;					// Windows Property string (the unformatted column name in tableid_0A)
 	unsigned char *data;			// The retrieved record value.
-	shared_extended_info *sei;		// Temporary pointer to hold the Windows Property string when processing the edb.
-	column_info *next;				// Next property
+	SHARED_EXTENDED_INFO *sei;		// Temporary pointer to hold the Windows Property string when processing the edb.
+	COLUMN_INFO *next;				// Next property
 	unsigned long Name_byte_length;	// The btye length of the Windows Property string excluding the NULL character.
-	unsigned long Type;				// The VarType of the column.
+	VARENUM Type;					// The VarType of the column.
 	unsigned long column_type;		// The Jet column data type.
 	long column_id;					// The column ID.
 	unsigned long max_size;			// The maximum size of the column's records.
 	bool JetCompress;				// The column has compressed data.
 };
 
-JET_ERR init_esedb_info( wchar_t *database_filepath );
-JET_ERR open_table( JET_PCSTR szTableName, JET_TABLEID *ptableid );
-JET_ERR get_table_column_info( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef );
-void cleanup_esedb_info();
+JET_ERR InitESEDBInfo( wchar_t *database_filepath, unsigned long revision, unsigned long page_size );
+JET_ERR OpenTable( JET_PCSTR szTableName, JET_TABLEID *ptableid );
+JET_ERR GetTableColumnInfo( JET_TABLEID tableid, JET_PCSTR szColumnName, JET_COLUMNDEF *pcolumndef );
+void CleanupESEDBInfo();
 
-JET_ERR get_column_info();		// tableid_0A and tableid_0P will be opened on success.
-JET_ERR get_column_info_win8();	// tableid_0A and tableid_0P will be opened on success.
-void build_retrieve_column_array();
-wchar_t *uncompress_value( unsigned char *value, unsigned long value_length );
-void convert_values( extended_info **ei );
+JET_ERR GetColumnInfo();		// tableid_0A and tableid_0P will be opened on success.
+JET_ERR GetColumnInfoWin8();	// tableid_0A and tableid_0P will be opened on success.
+void BuildRetrieveColumnArray();
+wchar_t *UncompressValue( unsigned char *value, unsigned long value_length );
+void ConvertValues( EXTENDED_INFO **ei );
 
-void set_error_message( char *msg );
-void handle_esedb_error();
+void SetErrorMessage( char *msg );
+void HandleESEDBError();
 
-// Internal variables. All all freed/reset in cleanup_esedb_info.
+// Internal variables. All all freed/reset in CleanupESEDBInfo().
 extern JET_ERR g_err;
 extern JET_INSTANCE g_instance;
 extern JET_SESID g_sesid;
@@ -63,12 +68,12 @@ extern JET_TABLEID g_tableid_0P, g_tableid_0A;
 extern JET_RETRIEVECOLUMN *g_rc_array;
 extern unsigned long g_column_count;
 extern char *g_ascii_filepath;
-extern column_info *g_ci;
+extern COLUMN_INFO *g_ci;
 
-extern column_info *g_item_path_display;
-extern column_info *g_file_attributes;
-extern column_info *g_thumbnail_cache_id;
-extern column_info *g_file_extension;
+extern COLUMN_INFO *g_item_path_display;
+extern COLUMN_INFO *g_file_attributes;
+extern COLUMN_INFO *g_thumbnail_cache_id;
+extern COLUMN_INFO *g_file_extension;
 
 extern bool g_use_big_endian;
 extern unsigned long g_revision;

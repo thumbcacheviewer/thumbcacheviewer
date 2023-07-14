@@ -341,6 +341,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lite_sqlite3.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\map_entries.cpp"
 				>
 			</File>
@@ -350,6 +354,10 @@
 			</File>
 			<File
 				RelativePath=".\read_esedb.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\read_sqlitedb.cpp"
 				>
 			</File>
 			<File
@@ -411,6 +419,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lite_sqlite3.h"
+				>
+			</File>
+			<File
 				RelativePath=".\map_entries.h"
 				>
 			</File>
@@ -420,6 +432,10 @@
 			</File>
 			<File
 				RelativePath=".\read_esedb.h"
+				>
+			</File>
+			<File
+				RelativePath=".\read_sqlitedb.h"
 				>
 			</File>
 			<File
