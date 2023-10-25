@@ -20,6 +20,8 @@
 #include "utilities.h"
 #include "menus.h"
 
+#include "lite_user32.h"
+
 #include <stdio.h>
 
 #define BTN_OK	1000
@@ -29,6 +31,12 @@ HWND g_hWnd_list_info = NULL;
 HWND g_hWnd_btn_close = NULL;
 
 FILE_INFO *g_current_fi = NULL;
+
+UINT current_dpi_info = 0, last_dpi_info = USER_DEFAULT_SCREEN_DPI;
+
+HFONT hFont_info = NULL;
+
+int row_height_info = 0;				// Height of our listview rows.
 
 int CALLBACK InfoCompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
@@ -78,16 +86,19 @@ int CALLBACK InfoCompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort 
 
 LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
 		case WM_CREATE:
 		{
+			current_dpi_info = GetDpiForWindow( hWnd );
+			hFont_info = UpdateFontsAndMetrics( current_dpi_info, /*last_dpi_info,*/ &row_height_info );
+
 			RECT rc;
 			GetClientRect( hWnd, &rc );
 
-			g_hWnd_static_mapped_hash = CreateWindowA( WC_STATICA, "Mapped Hash:", WS_CHILD | WS_VISIBLE, 20, 20, rc.right - 40, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static_mapped_hash = CreateWindowA( WC_STATICA, "Mapped Hash:", WS_CHILD | WS_VISIBLE, _SCALE_( 20, dpi_info ), _SCALE_( 20, dpi_info ), rc.right - _SCALE_( 40, dpi_info ), _SCALE_( 15, dpi_info ), hWnd, NULL, NULL, NULL );
 
-			g_hWnd_list_info = CreateWindowEx( WS_EX_CLIENTEDGE, WC_LISTVIEW, NULL, LVS_REPORT | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 20, 40, rc.right - 40, rc.bottom - 90, hWnd, NULL, NULL, NULL );
+			g_hWnd_list_info = CreateWindowEx( WS_EX_CLIENTEDGE, WC_LISTVIEW, NULL, LVS_REPORT | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, _SCALE_( 20, dpi_info ), _SCALE_( 38, dpi_info ), rc.right - _SCALE_( 40, dpi_info ), rc.bottom - _SCALE_( 92, dpi_info ), hWnd, NULL, NULL, NULL );
 			SendMessage( g_hWnd_list_info, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES );
 
 			// Initialize our listview columns
@@ -95,20 +106,20 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
 			lvc.fmt = LVCFMT_CENTER;
 			lvc.pszText = "Windows Property";
-			lvc.cx = 200;
+			lvc.cx = _SCALE_( 200, dpi_info );
 			SendMessageA( g_hWnd_list_info, LVM_INSERTCOLUMNA, 0, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = "Property Value";
-			lvc.cx = 350;
+			lvc.cx = _SCALE_( 350, dpi_info );
 			SendMessageA( g_hWnd_list_info, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
-			g_hWnd_btn_close = CreateWindowA( WC_BUTTONA, "Close", BS_DEFPUSHBUTTON | WS_CHILD | WS_TABSTOP | WS_VISIBLE, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, hWnd, ( HMENU )BTN_OK, NULL, NULL );
+			g_hWnd_btn_close = CreateWindowA( WC_BUTTONA, "Close", BS_DEFPUSHBUTTON | WS_CHILD | WS_TABSTOP | WS_VISIBLE, ( ( rc.right - rc.left ) / 2 ) - _SCALE_( 40, dpi_info ), rc.bottom - _SCALE_( 32, dpi_info ), _SCALE_( 80, dpi_info ), _SCALE_( 23, dpi_info ), hWnd, ( HMENU )BTN_OK, NULL, NULL );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_static_mapped_hash, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_list_info, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_btn_close, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_static_mapped_hash, WM_SETFONT, ( WPARAM )hFont_info, 0 );
+			SendMessage( g_hWnd_list_info, WM_SETFONT, ( WPARAM )hFont_info, 0 );
+			SendMessage( g_hWnd_btn_close, WM_SETFONT, ( WPARAM )hFont_info, 0 );
 
 			return 0;
 		}
@@ -293,7 +304,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// Set the row height of the list view.
 			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType == ODT_LISTVIEW )
 			{
-				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height;
+				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height_info;
 			}
 			return TRUE;
 		}
@@ -301,10 +312,38 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 		case WM_GETMINMAXINFO:
 		{
+			if ( current_dpi_info == 0 )
+			{
+				//last_dpi_info = USER_DEFAULT_SCREEN_DPI;
+				current_dpi_info = GetDpiForWindow( hWnd );
+			}
+
 			// Set the minimum dimensions that the window can be sized to.
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = MIN_HEIGHT;
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = _SCALE_( MIN_WIDTH, dpi_info );
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = _SCALE_( MIN_HEIGHT, dpi_info );
 			
+			return 0;
+		}
+		break;
+
+		case WM_DPICHANGED:
+		{
+			last_dpi_info = current_dpi_info;
+			current_dpi_info = HIWORD( wParam );
+			HFONT hFont = UpdateFontsAndMetrics( current_dpi_info, /*last_dpi_info,*/ &row_height_info );
+			EnumChildWindows( hWnd, EnumChildProc, ( LPARAM )hFont );
+			DeleteObject( hFont_info );
+			hFont_info = hFont;
+
+			for ( int i = 0; i < 2; ++i )
+			{
+				int column_width = ( int )SendMessageA( g_hWnd_list_info, LVM_GETCOLUMNWIDTH, ( WPARAM )i, 0 );
+				SendMessageA( g_hWnd_list_info, LVM_SETCOLUMNWIDTH, ( WPARAM )i, MAKELPARAM( _SCALE2_( column_width, dpi_info ), 0 ) );
+			}
+
+			RECT *rc = ( RECT * )lParam;
+			SetWindowPos( hWnd, NULL, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE );
+
 			return 0;
 		}
 		break;
@@ -337,10 +376,10 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			DeleteObject( color );
 
 			frame_rc = client_rc;
-			frame_rc.left += 10;
-			frame_rc.right -= 10;
-			frame_rc.top += 10;
-			frame_rc.bottom -= 40;
+			frame_rc.left += _SCALE_( 10, dpi_info );
+			frame_rc.right -= _SCALE_( 10, dpi_info );
+			frame_rc.top += _SCALE_( 10, dpi_info );
+			frame_rc.bottom -= _SCALE_( 40, dpi_info );
 
 			// Fill the frame.
 			color = CreateSolidBrush( ( COLORREF )GetSysColor( COLOR_WINDOW ) );
@@ -363,7 +402,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 		case WM_DRAWITEM:
 		{
 			DRAWITEMSTRUCT *dis = ( DRAWITEMSTRUCT * )lParam;
-      
+
 			// The item we want to draw is our listview.
 			if ( dis->CtlType == ODT_LISTVIEW && dis->itemData != NULL )
 			{
@@ -423,8 +462,8 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					last_rc = dis->rcItem;
 
 					// This will adjust the text to fit nicely into the rectangle.
-					last_rc.left = 5 + last_left;
-					last_rc.right = lvc.cx + last_left - 5;
+					last_rc.left = _SCALE_( 5, dpi_info ) + last_left;
+					last_rc.right = lvc.cx + last_left - _SCALE_( 5, dpi_info );
 
 					// Save the last left position of our column.
 					last_left += lvc.cx;
@@ -458,7 +497,7 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					HBITMAP ohbm = ( HBITMAP )SelectObject( hdcMem, hbm );
 					DeleteObject( ohbm );
 					DeleteObject( hbm );
-					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont );
+					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont_info );
 					DeleteObject( ohf );
 
 					// Transparent background for text.
@@ -514,9 +553,10 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			GetClientRect( hWnd, &rc );
 
 			// Allow our controls to move in relation to the parent window.
-			HDWP hdwp = BeginDeferWindowPos( 2 );
-			DeferWindowPos( hdwp, g_hWnd_list_info, HWND_TOP, 20, 40, rc.right - 40, rc.bottom - 90, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_btn_close, HWND_TOP, ( ( rc.right - rc.left ) / 2 ) - 40, rc.bottom - 32, 80, 23, SWP_NOZORDER );
+			HDWP hdwp = BeginDeferWindowPos( 3 );
+			DeferWindowPos( hdwp, g_hWnd_static_mapped_hash, HWND_TOP, _SCALE_( 20, dpi_info ), _SCALE_( 20, dpi_info ), rc.right - _SCALE_( 40, dpi_info ), _SCALE_( 15, dpi_info ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_list_info, HWND_TOP, _SCALE_( 20, dpi_info ), _SCALE_( 38, dpi_info ), rc.right - _SCALE_( 40, dpi_info ), rc.bottom - _SCALE_( 92, dpi_info ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_btn_close, HWND_TOP, ( ( rc.right - rc.left ) / 2 ) - _SCALE_( 40, dpi_info ), rc.bottom - _SCALE_( 32, dpi_info ), _SCALE_( 80, dpi_info ), _SCALE_( 23, dpi_info ), SWP_NOZORDER );
 			EndDeferWindowPos( hdwp );
 
 			return 0;
@@ -541,6 +581,15 @@ LRESULT CALLBACK InfoWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			SendMessageA( g_hWnd_static_mapped_hash, WM_SETTEXT, 0, ( LPARAM )"Mapped Hash:" );
 			SendMessage( g_hWnd_list_info, LVM_DELETEALLITEMS, 0, 0 );
+
+			return 0;
+		}
+		break;
+
+		case WM_DESTROY:
+		{
+			// Delete our font.
+			DeleteObject( hFont_info );
 
 			return 0;
 		}

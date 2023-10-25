@@ -53,6 +53,9 @@ void CleanupExtendedInfo( EXTENDED_INFO *ei );
 
 void Processing_Window( bool enable );
 
+BOOL CALLBACK EnumChildProc( HWND hWnd, LPARAM lParam );
+HFONT UpdateFontsAndMetrics( UINT current_dpi_update, /*UINT last_dpi_update,*/ int *row_height );
+
 extern HANDLE g_shutdown_semaphore;		// Blocks shutdown while a worker thread is active.
 extern LINKED_LIST *g_be;				// A list to hold all of the blank entries.
 extern dllrbt_tree *g_file_info_tree;	// Red-black tree of FILE_INFO structures.

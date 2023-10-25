@@ -19,6 +19,8 @@
 #include "globals.h"
 #include "utilities.h"
 
+#include "lite_user32.h"
+
 #include <stdio.h>
 
 #define IDT_TIMER		2001
@@ -43,10 +45,23 @@ POINT old_pos = { 0 };		// The old position of gdi_image. Used to calculate the 
 bool zoom = false;			// Toggled when we want to activate the timer and display the zoom text.
 bool timer_active = false;	// Toggled when the timer is active and used to reset it.
 
+UINT current_dpi_image = 0;//, last_dpi_image = USER_DEFAULT_SCREEN_DPI;
+
+HFONT hFont_image = NULL;
+
 LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
+		case WM_CREATE:
+		{
+			current_dpi_image = GetDpiForWindow( hWnd );
+			hFont_image = UpdateFontsAndMetrics( current_dpi_image, /*last_dpi_image,*/ NULL );
+
+			return 0;
+		}
+		break;
+
 		case WM_KEYDOWN:
 		{
 			switch ( wParam )
@@ -429,13 +444,15 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 				Gdiplus::Graphics graphics( hdcMem );
 					
 				// Draw the image on screen.
-				if ( scale > 1.0f )
+				if ( scale > 1.0f || current_dpi_image > USER_DEFAULT_SCREEN_DPI )
 				{
+					float scale2 = scale * current_dpi_image / USER_DEFAULT_SCREEN_DPI;
+
 					// Scale the image.
 					graphics.SetInterpolationMode( Gdiplus::InterpolationModeNearestNeighbor );
-					graphics.ScaleTransform( scale, scale );
+					graphics.ScaleTransform( scale2, scale2 );
 					// Whoa! This draws the image around its scaled center.
-					graphics.DrawImage( gdi_image, ( ( -drag_rect.x - ( ( gdi_image->GetWidth() / 2 ) * ( scale - 1 ) ) ) / scale ), ( ( -drag_rect.y - ( ( gdi_image->GetHeight() / 2 ) * ( scale - 1 ) ) ) / scale ) );
+					graphics.DrawImage( gdi_image, ( ( -drag_rect.x - ( ( gdi_image->GetWidth() / 2 ) * ( scale2 - 1 ) ) ) / scale2 ), ( ( -drag_rect.y - ( ( gdi_image->GetHeight() / 2 ) * ( scale2 - 1 ) ) ) / scale2 ) );
 				}
 				else
 				{
@@ -455,7 +472,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 					char buf[ 20 ] = { 0 };
 					sprintf_s( buf, 20, " Zoom level: %4.1fx ", scale );
 
-					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont );
+					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont_image );
 					DeleteObject( ohf );
 
 					SetBkColor( hdcMem, ( COLORREF )GetSysColor( COLOR_MENU ) );
@@ -623,6 +640,22 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		break;
 
+		case WM_DPICHANGED:
+		{
+			//last_dpi_image = current_dpi_image;
+			current_dpi_image = HIWORD( wParam );
+			HFONT hFont = UpdateFontsAndMetrics( current_dpi_image, /*last_dpi_image,*/ NULL );
+			EnumChildWindows( hWnd, EnumChildProc, ( LPARAM )hFont );
+			DeleteObject( hFont_image );
+			hFont_image = hFont;
+
+			RECT *rc = ( RECT * )lParam;
+			SetWindowPos( hWnd, NULL, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE );
+
+			return 0;
+		}
+		break;
+
 		case WM_CLOSE:
 		{
 			// We're no longer attached to the main window if we're closed.
@@ -631,6 +664,15 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 			// Hide the window if we lose focus.
 			ShowWindow( hWnd, SW_HIDE );
+			return 0;
+		}
+		break;
+
+		case WM_DESTROY:
+		{
+			// Delete our font.
+			DeleteObject( hFont_image );
+
 			return 0;
 		}
 		break;
@@ -644,7 +686,7 @@ LRESULT CALLBACK ImageWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 }
 
 VOID CALLBACK TimerProc( HWND hWnd, UINT /*msg*/, UINT /*idTimer*/, DWORD /*dwTime*/ )
-{ 
+{
 	zoom = false;
 
 	// Redraw our image.

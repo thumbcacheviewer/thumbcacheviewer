@@ -52,6 +52,8 @@
 
 #define NUM_COLUMNS			11
 
+#define WM_DPICHANGED		0x02E0
+
 #define WM_PROPAGATE		WM_APP		// Updates the scan window.
 #define WM_DESTROY_ALT		WM_APP + 1	// Allows non-window threads to call DestroyWindow.
 #define WM_CHANGE_CURSOR	WM_APP + 2	// Updates the window cursor.
@@ -155,9 +157,8 @@ extern HWND g_hWnd_active;			// Handle to the active window. Used to handle tab 
 
 extern CRITICAL_SECTION pe_cs;		// Allows various GUI processes (open, save, etc.) to be executed one at a time.
 
-extern HFONT hFont;					// Handle to the system's message font.
-
-extern int row_height;				// Height of our listview rows.
+#define _SCALE_( x, var ) MulDiv( x, current_##var, USER_DEFAULT_SCREEN_DPI )
+#define _SCALE2_( x, var ) MulDiv( x, current_##var, last_##var )
 
 extern HICON hIcon_bmp;				// Handle to the system's .bmp icon.
 extern HICON hIcon_jpg;				// Handle to the system's .jpg icon.

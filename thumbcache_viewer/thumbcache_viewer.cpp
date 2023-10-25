@@ -20,6 +20,7 @@
 #include "menus.h"
 #include "read_thumbcache.h"
 
+#include "lite_user32.h"
 #include "lite_mssrch.h"
 #include "lite_msscb.h"
 #include "lite_sqlite3.h"
@@ -33,10 +34,6 @@ HWND g_hWnd_scan = NULL;		// Handle to our scan window.
 HWND g_hWnd_info = NULL;		// Handle to our information window.
 HWND g_hWnd_property = NULL;	// Handle to our property window.
 HWND g_hWnd_active = NULL;		// Handle to the active window. Used to handle tab stops.
-
-HFONT hFont = NULL;				// Handle to our font object.
-
-int row_height = 0;				// Height of our listview rows.
 
 HICON hIcon_bmp = NULL;			// Handle to the system's .bmp icon.
 HICON hIcon_jpg = NULL;			// Handle to the system's .jpg icon.
@@ -55,32 +52,11 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 	// Initialize GDI+.
 	Gdiplus::GdiplusStartup( &gdiplusToken, &gdiplusStartupInput, NULL );
 
+	InitializeUser32();
+	UINT current_dpi_system = 0;//, last_dpi_system = USER_DEFAULT_SCREEN_DPI;
+
 	// Blocks our reading thread and various GUI operations.
 	InitializeCriticalSection( &pe_cs );
-
-	// Get the default message system font.
-	NONCLIENTMETRICS ncm = { NULL };
-	ncm.cbSize = sizeof( NONCLIENTMETRICS );
-	SystemParametersInfo( SPI_GETNONCLIENTMETRICS, sizeof( NONCLIENTMETRICS ), &ncm, 0 );
-
-	// Set our global font to the LOGFONT value obtained from the system.
-	hFont = CreateFontIndirect( &ncm.lfMessageFont );
-
-	// Get the row height for our listview control.
-	TEXTMETRIC tm;
-	HDC hDC = GetDC( NULL );
-	HFONT ohf = ( HFONT )SelectObject( hDC, hFont );
-	GetTextMetricsW( hDC, &tm );
-	SelectObject( hDC, ohf );	// Reset old font.
-	ReleaseDC( NULL, hDC );
-
-	row_height = tm.tmHeight + tm.tmExternalLeading + 5;
-
-	int icon_height = GetSystemMetrics( SM_CYSMICON ) + 2;
-	if ( row_height < icon_height )
-	{
-		row_height = icon_height;
-	}
 
 	// Get the system icon for each of the three file types.
 	SHFILEINFOA shfi = { NULL }; 
@@ -160,7 +136,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 		goto CLEANUP;
 	}
 
-	g_hWnd_main = CreateWindow( L"thumbcache", PROGRAM_CAPTION, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_WIDTH, MIN_HEIGHT, NULL, NULL, NULL, NULL );
+	g_hWnd_main = CreateWindow( L"thumbcache", PROGRAM_CAPTION, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 0, 0, 0, 0, NULL, NULL, NULL, NULL );
 
 	if ( !g_hWnd_main )
 	{
@@ -168,7 +144,9 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 		goto CLEANUP;
 	}
 
-	g_hWnd_image = CreateWindow( L"image", PROGRAM_CAPTION, WS_OVERLAPPEDWINDOW, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_HEIGHT, MIN_HEIGHT, NULL, NULL, NULL, NULL );
+	current_dpi_system = GetDpiForWindow( g_hWnd_main );
+
+	g_hWnd_image = CreateWindow( L"image", PROGRAM_CAPTION, WS_OVERLAPPEDWINDOW, ( ( GetSystemMetricsForDpi( SM_CXSCREEN, current_dpi_system ) - _SCALE_( MIN_WIDTH, dpi_system ) ) / 2 ), ( ( GetSystemMetricsForDpi( SM_CYSCREEN, current_dpi_system ) - _SCALE_( MIN_HEIGHT, dpi_system ) ) / 2 ), _SCALE_( MIN_HEIGHT, dpi_system ), _SCALE_( MIN_HEIGHT, dpi_system ), NULL, NULL, NULL, NULL );
 
 	if ( !g_hWnd_image )
 	{
@@ -176,7 +154,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 		goto CLEANUP;
 	}
 
-	g_hWnd_scan = CreateWindow( L"scan", L"Map File Paths to Cache Entry Hashes", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - ( 320 - 100 ) ) / 2 ), MIN_WIDTH, ( 320 - 100 ), g_hWnd_main, NULL, NULL, NULL );
+	g_hWnd_scan = CreateWindow( L"scan", L"Map File Paths to Cache Entry Hashes", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN, ( ( GetSystemMetricsForDpi( SM_CXSCREEN, current_dpi_system ) - _SCALE_( MIN_WIDTH, dpi_system ) ) / 2 ), ( ( GetSystemMetricsForDpi( SM_CYSCREEN, current_dpi_system ) - _SCALE_( ( 324 - 100 ), dpi_system ) ) / 2 ), _SCALE_( MIN_WIDTH, dpi_system ), _SCALE_( ( 324 - 100 ), dpi_system ), g_hWnd_main, NULL, NULL, NULL );
 
 	if ( !g_hWnd_scan )
 	{
@@ -184,7 +162,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 		goto CLEANUP;
 	}
 
-	g_hWnd_info = CreateWindow( L"info", L"Extended Information", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_WIDTH ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_WIDTH, MIN_HEIGHT, NULL, NULL, NULL, NULL );
+	g_hWnd_info = CreateWindow( L"info", L"Extended Information", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetricsForDpi( SM_CXSCREEN, current_dpi_system ) - _SCALE_( MIN_WIDTH, dpi_system ) ) / 2 ), ( ( GetSystemMetricsForDpi( SM_CYSCREEN, current_dpi_system ) - _SCALE_( MIN_HEIGHT, dpi_system ) ) / 2 ), _SCALE_( MIN_WIDTH, dpi_system ), _SCALE_( MIN_HEIGHT, dpi_system ), NULL, NULL, NULL, NULL );
 
 	if ( !g_hWnd_info )
 	{
@@ -192,7 +170,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 		goto CLEANUP;
 	}
 
-	g_hWnd_property = CreateWindow( L"property", L"Property Value", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetrics( SM_CXSCREEN ) - MIN_HEIGHT ) / 2 ), ( ( GetSystemMetrics( SM_CYSCREEN ) - MIN_HEIGHT ) / 2 ), MIN_HEIGHT, MIN_HEIGHT, NULL, NULL, NULL, NULL );
+	g_hWnd_property = CreateWindow( L"property", L"Property Value", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, ( ( GetSystemMetricsForDpi( SM_CXSCREEN, current_dpi_system ) - _SCALE_( MIN_HEIGHT, dpi_system ) ) / 2 ), ( ( GetSystemMetricsForDpi( SM_CYSCREEN, current_dpi_system ) - _SCALE_( MIN_HEIGHT, dpi_system ) ) / 2 ), _SCALE_( MIN_HEIGHT, dpi_system ), _SCALE_( MIN_HEIGHT, dpi_system ), NULL, NULL, NULL, NULL );
 
 	if ( !g_hWnd_property )
 	{
@@ -313,7 +291,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCm
 
 	if ( cmd_line == 0 || cmd_line == 1 )
 	{
-		ShowWindow( g_hWnd_main, SW_SHOW );
+		SetWindowPos( g_hWnd_main, HWND_TOP, ( ( GetSystemMetricsForDpi( SM_CXSCREEN, current_dpi_system ) - _SCALE_( MIN_WIDTH, dpi_system ) ) / 2 ), ( ( GetSystemMetricsForDpi( SM_CYSCREEN, current_dpi_system ) - _SCALE_( MIN_HEIGHT, dpi_system ) ) / 2 ), _SCALE_( MIN_WIDTH, dpi_system ), _SCALE_( MIN_HEIGHT, dpi_system ), SWP_SHOWWINDOW );
 	}
 
 	// Main message loop:
@@ -333,9 +311,6 @@ CLEANUP:
 	DestroyIcon( hIcon_png );
 	DestroyIcon( hIcon_bmp );
 
-	// Delete our font.
-	DeleteObject( hFont );
-
 	// Delete our critical section.
 	DeleteCriticalSection( &pe_cs );
 
@@ -346,6 +321,7 @@ CLEANUP:
 	UnInitializeMsSrch();
 	UnInitializeMsSCB();
 	UnInitializeSQLite3();
+	UnInitializeUser32();
 
 	if ( fail_type == 1 )
 	{

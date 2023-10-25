@@ -18,6 +18,9 @@
 
 #include "globals.h"
 #include "map_entries.h"
+#include "utilities.h"
+
+#include "lite_user32.h"
 
 #define BTN_SCAN		1001
 #define BTN_CANCEL		1002
@@ -39,6 +42,7 @@ HWND g_hWnd_load = NULL;
 HWND g_hWnd_static_hash[ 2 ] = { NULL };
 HWND g_hWnd_static_count[ 2 ] = { NULL };
 HWND g_hWnd_btn_details = NULL;
+HWND g_hWnd_static2 = NULL;
 HWND g_hWnd_static3 = NULL;
 HWND g_hWnd_static4 = NULL;
 HWND g_hWnd_static5 = NULL;
@@ -46,10 +50,14 @@ HWND g_hWnd_static5 = NULL;
 unsigned char scan_type = 0;	// 0 = scan directories, 1 = scan ese database
 unsigned char tab_index = 0;	// The current tab.
 
+UINT current_dpi_scan = 0;//, last_dpi_scan = USER_DEFAULT_SCREEN_DPI;
+
+HFONT hFont_scan = NULL;
+
 LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
 		case WM_CREATE:
 		{
 			RECT rc;
@@ -58,7 +66,7 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 			wchar_t current_directory[ MAX_PATH ] = { 0 };
 			GetCurrentDirectory( MAX_PATH, current_directory );
 
-			g_hWnd_static1 = CreateWindowA( WC_STATICA, "Initial scan directory:", WS_CHILD | WS_VISIBLE, 0, 0, rc.right, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static1 = CreateWindowA( WC_STATICA, "Initial scan directory:", WS_CHILD | WS_VISIBLE, 0, 0, rc.right, _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
 			g_hWnd_path[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, current_directory, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWnd, ( HMENU )EDIT_PATH, NULL, NULL );
 			g_hWnd_path[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, ( HMENU )EDIT_PATH, NULL, NULL );
 			SendMessage( g_hWnd_path[ 0 ], EM_LIMITTEXT, MAX_PATH - 1, 0 );
@@ -66,7 +74,7 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			g_hWnd_load = CreateWindowA( WC_BUTTONA, "...", WS_CHILD | WS_TABSTOP | WS_VISIBLE, 0, 0, 0, 0, hWnd, ( HMENU )BTN_LOAD, NULL, NULL );
 
-			HWND g_hWnd_static2 = CreateWindowA( WC_STATICA, "Limit scan to the following file types:", WS_CHILD | WS_VISIBLE, 0, 45, rc.right, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static2 = CreateWindowA( WC_STATICA, "Limit scan to the following file types:", WS_CHILD | WS_VISIBLE, 0, _SCALE_( 48, dpi_scan ), rc.right, _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
 			g_hWnd_extensions[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, L".jpg|.jpeg|.png|.bmp|.gif", ES_AUTOHSCROLL | WS_CHILD | WS_TABSTOP | WS_VISIBLE, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 			g_hWnd_extensions[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, L".jpg|.jpeg|.png|.bmp|.gif", ES_AUTOHSCROLL | WS_CHILD | WS_TABSTOP, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 			SendMessage( g_hWnd_extensions[ 0 ], EM_LIMITTEXT, MAX_PATH - 1, 0 );
@@ -77,38 +85,38 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 			g_hWnd_extended_information = CreateWindowA( WC_BUTTONA, "Retrieve Extended Information", BS_AUTOCHECKBOX | WS_CHILD | WS_TABSTOP, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 
-			g_hWnd_static3 = CreateWindowA( WC_STATICA, "Current file/folder:", WS_CHILD, 0, 90, rc.right, 15, hWnd, NULL, NULL, NULL );
+			g_hWnd_static3 = CreateWindowA( WC_STATICA, "Current file/folder:", WS_CHILD, 0, _SCALE_( 96, dpi_scan ), rc.right, _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
 			g_hWnd_hashing[ 0 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 			g_hWnd_hashing[ 1 ] = CreateWindowEx( WS_EX_CLIENTEDGE, WC_EDIT, NULL, ES_AUTOHSCROLL | ES_READONLY | WS_CHILD, 0, 0, 0, 0, hWnd, NULL, NULL, NULL );
 
-			g_hWnd_static4 = CreateWindowA( WC_STATICA, "Current file/folder hash:", WS_CHILD, 0, 135, 200, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_hash[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 135, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_hash[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 135, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
+			g_hWnd_static4 = CreateWindowA( WC_STATICA, "Current file/folder hash:", WS_CHILD, 0, _SCALE_( 144, dpi_scan ), _SCALE_( 200, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
+			g_hWnd_static_hash[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, _SCALE_( 205, dpi_scan ), _SCALE_( 144, dpi_scan ), rc.right - _SCALE_( 205, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
+			g_hWnd_static_hash[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, _SCALE_( 205, dpi_scan ), _SCALE_( 144, dpi_scan ), rc.right - _SCALE_( 205, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
 
-			g_hWnd_static5 = CreateWindowA( WC_STATICA, "Total files and/or folders:", WS_CHILD, 0, 160, 200, 15, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_count[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 160, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
-			g_hWnd_static_count[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, 205, 160, rc.right - 205, 23, hWnd, NULL, NULL, NULL );
+			g_hWnd_static5 = CreateWindowA( WC_STATICA, "Total files and/or folders:", WS_CHILD, 0, _SCALE_( 163, dpi_scan ), _SCALE_( 200, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
+			g_hWnd_static_count[ 0 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, _SCALE_( 205, dpi_scan ), _SCALE_( 163, dpi_scan ), rc.right - _SCALE_( 205, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
+			g_hWnd_static_count[ 1 ] = CreateWindow( WC_STATIC, NULL, WS_CHILD, _SCALE_( 205, dpi_scan ), _SCALE_( 163, dpi_scan ), rc.right - _SCALE_( 205, dpi_scan ), _SCALE_( 15, dpi_scan ), hWnd, NULL, NULL, NULL );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_static1, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static2, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static3, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static4, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static5, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_path[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_path[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_load, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_extensions[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_extensions[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_chk_folders[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_chk_folders[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_extended_information, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_hashing[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_hashing[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static_hash[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static_hash[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static_count[ 0 ], WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_static_count[ 1 ], WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_static1, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static2, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static3, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static4, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static5, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_path[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_path[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_load, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_extensions[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_extensions[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_chk_folders[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_chk_folders[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_extended_information, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_hashing[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_hashing[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static_hash[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static_hash[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static_count[ 0 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_static_count[ 1 ], WM_SETFONT, ( WPARAM )hFont_scan, 0 );
 
 			return 0;
 		}
@@ -154,7 +162,7 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 					{
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
-						ofn.lpstrFilter = L"Windows Search Database Files (*.edb;*.db)\0*.edb;*.db\0All Files (*.*)\0*.*\0";
+						ofn.lpstrFilter = L"Windows Search Database Files (*.edb;*.db)\0*.edb;*.db\0All Files (*.*)\0*.*\0\0";
 						ofn.lpstrFile = scan_directory;
 						ofn.nMaxFile = MAX_PATH;
 						ofn.lpstrTitle = L"Open a Windows Search database file";
@@ -191,17 +199,23 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 			GetClientRect( hWnd, &rc );
 
 			// Allow our controls to move in relation to the parent window.
-			HDWP hdwp = BeginDeferWindowPos( 10 );
-			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 0, 15, rc.right - 35, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 0, 15, rc.right - 35, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - 30, 15, 30, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 0, 60, rc.right - 295, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 0, 60, rc.right - 105, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - 290, 62, 100, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - 100, 62, 100, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - 180, 62, 180, 20, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 0, 105, rc.right, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 0, 105, rc.right, 23, SWP_NOZORDER );
+			HDWP hdwp = BeginDeferWindowPos( 15 );
+			DeferWindowPos( hdwp, g_hWnd_static1, HWND_TOP, 0, 0, rc.right, _SCALE_( 15, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_static2, HWND_TOP, 0, _SCALE_( 48, dpi_scan ), rc.right, _SCALE_( 15, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_static3, HWND_TOP, 0, _SCALE_( 96, dpi_scan ), rc.right, _SCALE_( 15, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_static4, HWND_TOP, 0, _SCALE_( 144, dpi_scan ), _SCALE_( 200, dpi_scan ), _SCALE_( 15, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_static5, HWND_TOP, 0, _SCALE_( 163, dpi_scan ), _SCALE_( 200, dpi_scan ), _SCALE_( 15, dpi_scan ), SWP_NOZORDER );
+
+			DeferWindowPos( hdwp, g_hWnd_path[ 1 ], HWND_TOP, 0, _SCALE_( 18, dpi_scan ), rc.right - _SCALE_( 35, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_path[ 0 ], HWND_TOP, 0, _SCALE_( 18, dpi_scan ), rc.right - _SCALE_( 35, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_load, HWND_TOP, rc.right - _SCALE_( 30, dpi_scan ), _SCALE_( 18, dpi_scan ), _SCALE_( 30, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 1 ], HWND_TOP, 0, _SCALE_( 66, dpi_scan ), rc.right - _SCALE_( 295, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extensions[ 0 ], HWND_TOP, 0, _SCALE_( 66, dpi_scan ), rc.right - _SCALE_( 105, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 1 ], HWND_TOP, rc.right - _SCALE_( 290, dpi_scan ), _SCALE_( 68, dpi_scan ), _SCALE_( 100, dpi_scan ), _SCALE_( 20, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_chk_folders[ 0 ], HWND_TOP, rc.right - _SCALE_( 100, dpi_scan ), _SCALE_( 68, dpi_scan ), _SCALE_( 100, dpi_scan ), _SCALE_( 20, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_extended_information, HWND_TOP, rc.right - _SCALE_( 180, dpi_scan ), _SCALE_( 68, dpi_scan ), _SCALE_( 180, dpi_scan ), _SCALE_( 20, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_hashing[ 1 ], HWND_TOP, 0, _SCALE_( 114, dpi_scan ), rc.right, _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_hashing[ 0 ], HWND_TOP, 0, _SCALE_( 114, dpi_scan ), rc.right, _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
 			EndDeferWindowPos( hdwp );
 
 			return 0;
@@ -218,14 +232,17 @@ LRESULT CALLBACK ScanTabWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 
 LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
 		case WM_CREATE:
 		{
+			current_dpi_scan = GetDpiForWindow( hWnd );
+			hFont_scan = UpdateFontsAndMetrics( current_dpi_scan, /*last_dpi_scan,*/ NULL );
+
 			RECT rc;
 			GetClientRect( hWnd, &rc );
 
-			g_hWnd_tab = CreateWindowEx( WS_EX_CONTROLPARENT, WC_TABCONTROL, NULL, WS_CHILD | WS_CLIPCHILDREN | WS_TABSTOP | WS_VISIBLE, 10, 10, rc.right - 20, rc.bottom - 50, hWnd, NULL, NULL, NULL );
+			g_hWnd_tab = CreateWindowEx( WS_EX_CONTROLPARENT, WC_TABCONTROL, NULL, WS_CHILD | WS_CLIPCHILDREN | WS_TABSTOP | WS_VISIBLE, _SCALE_( 10, dpi_scan ), _SCALE_( 10, dpi_scan ), rc.right - _SCALE_( 20, dpi_scan ), rc.bottom - _SCALE_( 50, dpi_scan ), hWnd, NULL, NULL, NULL );
 
 			TCITEMA ti = { 0 };
 			ti.mask = TCIF_PARAM | TCIF_TEXT;	// The tab will have text and an lParam value.
@@ -237,14 +254,14 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			ti.lParam = ( LPARAM )1;
 			SendMessageA( g_hWnd_tab, TCM_INSERTITEMA, 1, ( LPARAM )&ti );	// Insert a new tab at the end.
 
-			SendMessage( g_hWnd_tab, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_tab, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
 
 			// Set the tab's font before we get the item rect so that we have an accurate height.
 			RECT rc_tab;
 			GetClientRect( g_hWnd_tab, &rc );
 			SendMessage( g_hWnd_tab, TCM_GETITEMRECT, 0, ( LPARAM )&rc_tab );
 
-			g_hWnd_scan_tab = CreateWindowEx( WS_EX_CONTROLPARENT, L"scan_tab", NULL, WS_CHILD | WS_TABSTOP | WS_VISIBLE, 10, ( rc_tab.bottom + rc_tab.top ) + 8, rc.right - 20, rc.bottom - ( ( rc_tab.bottom + rc_tab.top ) + 16 ), g_hWnd_tab, NULL, NULL, NULL );
+			g_hWnd_scan_tab = CreateWindowEx( WS_EX_CONTROLPARENT, L"scan_tab", NULL, WS_CHILD | WS_TABSTOP | WS_VISIBLE, _SCALE_( 10, dpi_scan ), ( rc_tab.bottom + rc_tab.top ) + _SCALE_( 8, dpi_scan ), rc.right - _SCALE_( 20, dpi_scan ), rc.bottom - ( ( rc_tab.bottom + rc_tab.top ) + _SCALE_( 16, dpi_scan ) ), g_hWnd_tab, NULL, NULL, NULL );
 
 			g_hWnd_btn_details = CreateWindowA( WC_BUTTONA, "Show Details \xBB", WS_CHILD | WS_TABSTOP | WS_VISIBLE, 0, 0, 0, 0, hWnd, ( HMENU )BTN_DETAILS, NULL, NULL );
 
@@ -252,9 +269,9 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			g_hWnd_btn_cancel = CreateWindowA( WC_BUTTONA, "Cancel", WS_CHILD | WS_TABSTOP | WS_VISIBLE, 0, 0, 0, 0, hWnd, ( HMENU )BTN_CANCEL, NULL, NULL );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_btn_details, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_btn_scan, WM_SETFONT, ( WPARAM )hFont, 0 );
-			SendMessage( g_hWnd_btn_cancel, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_btn_details, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_btn_scan, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
+			SendMessage( g_hWnd_btn_cancel, WM_SETFONT, ( WPARAM )hFont_scan, 0 );
 
 			return 0;
 		}
@@ -386,7 +403,7 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					// Adjust the window height.
 					RECT rc;
 					GetWindowRect( hWnd, &rc );
-					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, 320 - ( g_show_details ? 5 : 100 ), SWP_NOMOVE );
+					SetWindowPos( hWnd, NULL, 0, 0, rc.right - rc.left, _SCALE_( ( 324 - ( g_show_details ? 14 : 100 ) ), dpi_scan ), SWP_NOMOVE );
 				}
 				break;
 			}
@@ -471,17 +488,17 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 			// Allow our controls to move in relation to the parent window.
 			HDWP hdwp = BeginDeferWindowPos( 4 );
-			DeferWindowPos( hdwp, g_hWnd_tab, HWND_TOP, 10, 10, rc.right - 20, rc.bottom - 50, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_btn_details, HWND_TOP, 10, rc.bottom - 32, 100, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_btn_scan, HWND_TOP, rc.right - 175, rc.bottom - 32, 80, 23, SWP_NOZORDER );
-			DeferWindowPos( hdwp, g_hWnd_btn_cancel, HWND_TOP, rc.right - 90, rc.bottom - 32, 80, 23, SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_tab, HWND_TOP, _SCALE_( 10, dpi_scan ), _SCALE_( 10, dpi_scan ), rc.right - _SCALE_( 20, dpi_scan ), rc.bottom - _SCALE_( 50, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_btn_details, HWND_TOP, _SCALE_( 10, dpi_scan ), rc.bottom - _SCALE_( 32, dpi_scan ), _SCALE_( 100, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_btn_scan, HWND_TOP, rc.right - _SCALE_( 175, dpi_scan ), rc.bottom - _SCALE_( 32, dpi_scan ), _SCALE_( 80, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
+			DeferWindowPos( hdwp, g_hWnd_btn_cancel, HWND_TOP, rc.right - _SCALE_( 90, dpi_scan ), rc.bottom - _SCALE_( 32, dpi_scan ), _SCALE_( 80, dpi_scan ), _SCALE_( 23, dpi_scan ), SWP_NOZORDER );
 			EndDeferWindowPos( hdwp );
 
 			RECT rc_tab;
 			GetClientRect( g_hWnd_tab, &rc );
 			SendMessage( g_hWnd_tab, TCM_GETITEMRECT, 0, ( LPARAM )&rc_tab );
 
-			SetWindowPos( g_hWnd_scan_tab, HWND_TOP, 10, ( rc_tab.bottom + rc_tab.top ) + 8, rc.right - 20, rc.bottom - ( ( rc_tab.bottom + rc_tab.top ) + 16 ), SWP_NOZORDER );
+			SetWindowPos( g_hWnd_scan_tab, HWND_TOP, _SCALE_( 10, dpi_scan ), ( rc_tab.bottom + rc_tab.top ) + _SCALE_( 8, dpi_scan ), rc.right - _SCALE_( 20, dpi_scan ), rc.bottom - ( ( rc_tab.bottom + rc_tab.top ) + _SCALE_( 16, dpi_scan ) ), SWP_NOZORDER );
 
 			return 0;
 		}
@@ -489,10 +506,32 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 		case WM_GETMINMAXINFO:
 		{
+			if ( current_dpi_scan == 0 )
+			{
+				//last_dpi_scan = USER_DEFAULT_SCREEN_DPI;
+				current_dpi_scan = GetDpiForWindow( hWnd );
+			}
+
 			// Set the minimum dimensions that the window can be sized to.
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = MIN_WIDTH;
-			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = 320 - ( g_show_details ? 5 : 100 );
-			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = 320 - ( g_show_details ? 5 : 100 );
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.x = _SCALE_( MIN_WIDTH, dpi_scan );
+			( ( MINMAXINFO * )lParam )->ptMinTrackSize.y = _SCALE_( ( 324 - ( g_show_details ? 14 : 100 ) ), dpi_scan );
+			( ( MINMAXINFO * )lParam )->ptMaxTrackSize.y = ( ( MINMAXINFO * )lParam )->ptMinTrackSize.y;
+
+			return 0;
+		}
+		break;
+
+		case WM_DPICHANGED:
+		{
+			//last_dpi_scan = current_dpi_scan;
+			current_dpi_scan = HIWORD( wParam );
+			HFONT hFont = UpdateFontsAndMetrics( current_dpi_scan, /*last_dpi_scan,*/ NULL );
+			EnumChildWindows( hWnd, EnumChildProc, ( LPARAM )hFont );
+			DeleteObject( hFont_scan );
+			hFont_scan = hFont;
+
+			RECT *rc = ( RECT * )lParam;
+			SetWindowPos( hWnd, NULL, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE );
 
 			return 0;
 		}
@@ -516,6 +555,15 @@ LRESULT CALLBACK ScanWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			SetForegroundWindow( g_hWnd_main );
 
 			ShowWindow( hWnd, SW_HIDE );
+
+			return 0;
+		}
+		break;
+
+		case WM_DESTROY:
+		{
+			// Delete our font.
+			DeleteObject( hFont_scan );
 
 			return 0;
 		}

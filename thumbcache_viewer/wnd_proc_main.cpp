@@ -21,6 +21,8 @@
 #include "read_thumbcache.h"
 #include "menus.h"
 
+#include "lite_user32.h"
+
 WNDPROC ListViewProc = NULL;		// Subclassed listview window.
 WNDPROC EditProc = NULL;			// Subclassed listview edit window.
 
@@ -64,6 +66,12 @@ HCURSOR wait_cursor = NULL;			// Temporary cursor while processing entries.
 // Image variables
 FILE_INFO *current_file_info = NULL;	// Holds information about the currently selected image. Gets deleted in WM_DESTROY.
 Gdiplus::Image *gdi_image = NULL;	// GDI+ image object. We need it to handle .png and .jpg images.
+
+UINT current_dpi_main = 0, last_dpi_main = USER_DEFAULT_SCREEN_DPI;
+
+HFONT hFont_main = NULL;
+
+int row_height_main = 0;				// Height of our listview rows.
 
 int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 {
@@ -182,21 +190,24 @@ int CALLBACK CompareFunc( LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort )
 
 LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
 		case WM_CREATE:
 		{
+			current_dpi_main = GetDpiForWindow( hWnd );
+			hFont_main = UpdateFontsAndMetrics( current_dpi_main, /*last_dpi_main,*/ &row_height_main );
+
 			CreateMenus();
 
 			// Set our menu bar.
 			SetMenu( hWnd, g_hMenu );
 
 			// Create our listview window.
-			g_hWnd_list = CreateWindow( WC_LISTVIEW, NULL, LVS_REPORT | LVS_EDITLABELS | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 0, 0, MIN_WIDTH, MIN_HEIGHT, hWnd, NULL, NULL, NULL );
+			g_hWnd_list = CreateWindow( WC_LISTVIEW, NULL, LVS_REPORT | LVS_EDITLABELS | LVS_OWNERDRAWFIXED | WS_CHILDWINDOW | WS_VISIBLE, 0, 0, _SCALE_( MIN_WIDTH, dpi_main ), _SCALE_( MIN_HEIGHT, dpi_main ), hWnd, NULL, NULL, NULL );
 			SendMessage( g_hWnd_list, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_list, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_list, WM_SETFONT, ( WPARAM )hFont_main, 0 );
 
 			// Allow drag and drop for the listview.
 			DragAcceptFiles( g_hWnd_list, TRUE );
@@ -210,50 +221,50 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT; 
 			lvc.fmt = LVCFMT_CENTER;
 			lvc.pszText = "#";
-			lvc.cx = 35;
+			lvc.cx = _SCALE_( 35, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 0, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = "Filename";
-			lvc.cx = 145;
+			lvc.cx = _SCALE_( 145, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 1, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_RIGHT;
 			lvc.pszText = "Cache Entry Offset";
-			lvc.cx = 110;
+			lvc.cx = _SCALE_( 110, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 2, ( LPARAM )&lvc );
 
 			lvc.pszText = "Cache Entry Size";
-			lvc.cx = 110;
+			lvc.cx = _SCALE_( 110, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 3, ( LPARAM )&lvc );
 
 			lvc.pszText = "Data Offset";
-			lvc.cx = 90;
+			lvc.cx = _SCALE_( 90, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 4, ( LPARAM )&lvc );
 
 			lvc.pszText = "Data Size";
-			lvc.cx = 65;
+			lvc.cx = _SCALE_( 65, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 5, ( LPARAM )&lvc );
 
 			lvc.fmt = LVCFMT_LEFT;
 			lvc.pszText = "Data Checksum";
-			lvc.cx = 125;
+			lvc.cx = _SCALE_( 125, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 6, ( LPARAM )&lvc );
 
 			lvc.pszText = "Header Checksum";
-			lvc.cx = 125;
+			lvc.cx = _SCALE_( 125, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 7, ( LPARAM )&lvc );
 
 			lvc.pszText = "Cache Entry Hash";
-			lvc.cx = 125;
+			lvc.cx = _SCALE_( 125, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 8, ( LPARAM )&lvc );
 
 			lvc.pszText = "System";
-			lvc.cx = 95;
+			lvc.cx = _SCALE_( 95, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 9, ( LPARAM )&lvc );
 
 			lvc.pszText = "Location";
-			lvc.cx = 600;
+			lvc.cx = _SCALE_( 600, dpi_main );
 			SendMessageA( g_hWnd_list, LVM_INSERTCOLUMNA, 10, ( LPARAM )&lvc );
 
 			// Save our initial window position.
@@ -436,7 +447,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// Set the row height of the list view.
 			if ( ( ( LPMEASUREITEMSTRUCT )lParam )->CtlType == ODT_LISTVIEW )
 			{
-				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height;
+				( ( LPMEASUREITEMSTRUCT )lParam )->itemHeight = row_height_main;
 			}
 			return TRUE;
 		}
@@ -451,6 +462,28 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			return 0;
 		}
 		break;*/
+
+		case WM_DPICHANGED:
+		{
+			last_dpi_main = current_dpi_main;
+			current_dpi_main = HIWORD( wParam );
+			HFONT hFont = UpdateFontsAndMetrics( current_dpi_main, /*last_dpi_main,*/ &row_height_main );
+			EnumChildWindows( hWnd, EnumChildProc, ( LPARAM )hFont );
+			DeleteObject( hFont_main );
+			hFont_main = hFont;
+
+			for ( int i = 0; i < 11; ++i )
+			{
+				int column_width = ( int )SendMessageA( g_hWnd_list, LVM_GETCOLUMNWIDTH, ( WPARAM )i, 0 );
+				SendMessageA( g_hWnd_list, LVM_SETCOLUMNWIDTH, ( WPARAM )i, MAKELPARAM( _SCALE2_( column_width, dpi_main ), 0 ) );
+			}
+
+			RECT *rc = ( RECT * )lParam;
+			SetWindowPos( hWnd, NULL, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE );
+
+			return 0;
+		}
+		break;
 
 		case WM_CHANGE_CURSOR:
 		{
@@ -498,7 +531,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						wmemset( pi->filepath, 0, MAX_PATH * MAX_PATH );
 						OPENFILENAME ofn = { NULL };
 						ofn.lStructSize = sizeof( OPENFILENAME );
-						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0Iconcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0";
+						ofn.lpstrFilter = L"Thumbcache Database Files (*.db)\0*.db\0Iconcache Database Files (*.db)\0*.db\0All Files (*.*)\0*.*\0\0";
 						ofn.lpstrFile = pi->filepath;
 						ofn.nMaxFile = MAX_PATH * MAX_PATH;
 						ofn.lpstrTitle = L"Open a Thumbcache Database file";
@@ -590,7 +623,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 						OPENFILENAME ofn = { 0 };
 						ofn.lStructSize = sizeof( OPENFILENAME );
 						ofn.hwndOwner = hWnd;
-						ofn.lpstrFilter = L"CSV (Comma delimited) (*.csv)\0*.csv\0";
+						ofn.lpstrFilter = L"CSV (Comma delimited) (*.csv)\0*.csv\0\0";
 						ofn.lpstrDefExt = L"csv";
 						ofn.lpstrTitle = L"Export list to a CSV (comma-separated values) file";
 						ofn.lpstrFile = file_path;
@@ -706,7 +739,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 
 					case MENU_ABOUT:
 					{
-						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.3.9 ("
+						MessageBoxA( hWnd, "Thumbcache Viewer is made free under the GPLv3 license.\r\n\r\nVersion 1.0.4.0 ("
 #ifdef _WIN64
 										   "64"
 #else
@@ -1033,7 +1066,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 							// Move our image window next to the main window on its right side if it's the first time we're showing the image window.
 							if ( !first_show )
 							{
-								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right - ( g_border_width * 2 ), last_pos.top, MIN_HEIGHT, MIN_HEIGHT, SWP_NOACTIVATE );
+								SetWindowPos( g_hWnd_image, HWND_TOPMOST, last_pos.right - ( g_border_width * 2 ), last_pos.top, _SCALE_( MIN_HEIGHT, dpi_main ), _SCALE_( MIN_HEIGHT, dpi_main ), SWP_NOACTIVATE );
 								first_show = true;
 							}
 
@@ -1388,8 +1421,8 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					last_rc = dis->rcItem;
 
 					// This will adjust the text to fit nicely into the rectangle.
-					last_rc.left = 5 + last_left;
-					last_rc.right = lvc.cx + last_left - 5;
+					last_rc.left = _SCALE_( 5, dpi_main ) + last_left;
+					last_rc.right = lvc.cx + last_left - _SCALE_( 5, dpi_main );
 
 					// Save the last left position of our column.
 					last_left += lvc.cx;
@@ -1423,7 +1456,7 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 					HBITMAP ohbm = ( HBITMAP )SelectObject( hdcMem, hbm );
 					DeleteObject( ohbm );
 					DeleteObject( hbm );
-					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont );
+					HFONT ohf = ( HFONT )SelectObject( hdcMem, hFont_main );
 					DeleteObject( ohf );
 
 					// Transparent background for text.
@@ -1569,6 +1602,9 @@ LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam 
 			// Since these aren't owned by a window, we need to destroy them.
 			DestroyMenu( g_hMenuSub_context );
 			DestroyMenu( g_hMenuSub_ei_context );
+
+			// Delete our font.
+			DeleteObject( hFont_main );
 
 			PostQuitMessage( 0 );
 			return 0;

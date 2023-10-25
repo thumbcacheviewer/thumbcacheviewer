@@ -17,22 +17,32 @@
 */
 
 #include "globals.h"
+#include "utilities.h"
+
+#include "lite_user32.h"
 
 HWND g_hWnd_edit_property_value = NULL;
 
+UINT current_dpi_property = 0;//, last_dpi_property = USER_DEFAULT_SCREEN_DPI;
+
+HFONT hFont_property = NULL;
+
 LRESULT CALLBACK PropertyWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    switch ( msg )
-    {
+	switch ( msg )
+	{
 		case WM_CREATE:
 		{
+			current_dpi_property = GetDpiForWindow( hWnd );
+			hFont_property = UpdateFontsAndMetrics( current_dpi_property, /*last_dpi_property,*/ NULL );
+
 			RECT rc;
 			GetClientRect( hWnd, &rc );
 
 			g_hWnd_edit_property_value = CreateWindow( WC_EDIT, NULL, ES_MULTILINE | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_HSCROLL | WS_VSCROLL, 0, 0, rc.right, rc.bottom, hWnd, NULL, NULL, NULL );
 
 			// Make pretty font.
-			SendMessage( g_hWnd_edit_property_value, WM_SETFONT, ( WPARAM )hFont, 0 );
+			SendMessage( g_hWnd_edit_property_value, WM_SETFONT, ( WPARAM )hFont_property, 0 );
 
 			return 0;
 		}
@@ -58,11 +68,36 @@ LRESULT CALLBACK PropertyWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 		}
 		break;
 
+		case WM_DPICHANGED:
+		{
+			//last_dpi_property = current_dpi_property;
+			current_dpi_property = HIWORD( wParam );
+			HFONT hFont = UpdateFontsAndMetrics( current_dpi_property, /*last_dpi_property,*/ NULL );
+			EnumChildWindows( hWnd, EnumChildProc, ( LPARAM )hFont );
+			DeleteObject( hFont_property );
+			hFont_property = hFont;
+
+			RECT *rc = ( RECT * )lParam;
+			SetWindowPos( hWnd, NULL, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE );
+
+			return 0;
+		}
+		break;
+
 		case WM_CLOSE:
 		{
 			ShowWindow( hWnd, SW_HIDE );
 
 			SendMessage( g_hWnd_edit_property_value, WM_SETTEXT, 0, 0 );
+
+			return 0;
+		}
+		break;
+
+		case WM_DESTROY:
+		{
+			// Delete our font.
+			DeleteObject( hFont_property );
 
 			return 0;
 		}

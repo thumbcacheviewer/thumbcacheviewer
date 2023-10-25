@@ -345,6 +345,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lite_user32.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\map_entries.cpp"
 				>
 			</File>
@@ -420,6 +424,10 @@
 			</File>
 			<File
 				RelativePath=".\lite_sqlite3.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lite_user32.h"
 				>
 			</File>
 			<File

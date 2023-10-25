@@ -23,6 +23,8 @@
 #include "map_entries.h"
 #include "crc64.h"
 
+#include "lite_user32.h"
+
 #include <stdio.h>
 
 HANDLE g_shutdown_semaphore = NULL;		// Blocks shutdown while a worker thread is active.
@@ -1604,4 +1606,45 @@ unsigned __stdcall save_items( void *pArguments )
 
 	_endthreadex( 0 );
 	return 0;
+}
+
+BOOL CALLBACK EnumChildProc( HWND hWnd, LPARAM lParam )
+{
+	HFONT hFont = ( HFONT )lParam;
+
+	SendMessage( hWnd, WM_SETFONT, ( WPARAM )hFont, 0 );
+
+	return TRUE;
+}
+
+HFONT UpdateFontsAndMetrics( UINT current_dpi_update, /*UINT last_dpi_update,*/ int *row_height )
+{
+	// Get the default message system font.
+	NONCLIENTMETRICS ncm = { NULL };
+	ncm.cbSize = sizeof( NONCLIENTMETRICS );
+	SystemParametersInfoForDpi( SPI_GETNONCLIENTMETRICS, sizeof( NONCLIENTMETRICS ), &ncm, 0, current_dpi_update );
+
+	// Set our global font to the LOGFONT value obtained from the system.
+	HFONT hFont = CreateFontIndirect( &ncm.lfMessageFont );
+
+	if ( row_height != NULL )
+	{
+		// Get the row height for our listview control.
+		TEXTMETRIC tm;
+		HDC hDC = GetDC( NULL );
+		HFONT ohf = ( HFONT )SelectObject( hDC, hFont );
+		GetTextMetricsW( hDC, &tm );
+		SelectObject( hDC, ohf );	// Reset old font.
+		ReleaseDC( NULL, hDC );
+
+		*row_height = tm.tmHeight + tm.tmExternalLeading + _SCALE_( 5, dpi_update );
+
+		int icon_height = GetSystemMetricsForDpi( SM_CYSMICON, current_dpi_update ) + _SCALE_( 2, dpi_update );
+		if ( *row_height < icon_height )
+		{
+			*row_height = icon_height;
+		}
+	}
+
+	return hFont;
 }
